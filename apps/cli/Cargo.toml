@@ -1,13 +1,20 @@
 [package]
 name = "fauxx-cli"
 description = "Fauxx desktop companion CLI / headless entrypoint. A thin clap client over fauxx-core."
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
 publish = false
+
+# `publish = false` keeps the app crates off crates.io. dist skips unpublished
+# packages by default, so opt this binary back in explicitly (this is the
+# per-package opt-in dist actually reads; a [dist.packages.*] table in
+# dist-workspace.toml does NOT override publish = false).
+[package.metadata.dist]
+dist = true
 
 [lints]
 workspace = true

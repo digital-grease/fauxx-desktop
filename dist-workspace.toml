@@ -1,12 +1,13 @@
 # Standalone `dist` (axodotdev, formerly cargo-dist) configuration for
 # fauxx-desktop (C0 #6: packaging + reproducible signed releases).
 #
-# This is a STANDALONE config on purpose. The root Cargo.toml is deliberately
-# left untouched: there is no [workspace.metadata.dist] table there. Keeping the
-# release orchestration in its own file means the Cargo manifest stays focused
-# on the build graph, and the whole dist layer can be swapped or removed without
-# editing any crate (see docs/RELEASING.md for the rationale and the "dist is an
-# orchestration convenience, not a reproducibility guarantee" caveat).
+# This file holds the STANDALONE global dist config (the root Cargo.toml has no
+# [workspace.metadata.dist] table). The only per-crate dist footprint is a small
+# [package.metadata.dist] opt-in in apps/cli and apps/desktop, required because
+# those crates set `publish = false` (dist skips unpublished packages otherwise).
+# Everything else (targets, installers, signing, CI) lives here, so the release
+# layer stays mostly isolated (see docs/RELEASING.md for the rationale and the
+# "dist is an orchestration convenience, not a reproducibility guarantee" caveat).
 #
 # License: AGPL-3.0-only. See LICENSE at the repo root. The release notes and
 # every generated installer carry this license (license = "AGPL-3.0-only" is
@@ -157,17 +158,11 @@ pkg-config = '*'
 # backend and never builds its GTK3 path on the platforms that use it.
 
 # ---------------------------------------------------------------------------
-# Per-package overrides: which binaries ship, and with which features.
+# Per-package config (which binaries ship, and with which features) lives in
+# each crate's [package.metadata.dist] table, NOT here. The crates set
+# `publish = false`, and dist skips unpublished packages unless they opt back in
+# with `dist = true` in their own [package.metadata.dist]; a [dist.packages.*]
+# table in this file does NOT override publish = false. apps/cli sets
+# dist = true (ships `fauxx-cli`); apps/desktop sets dist = true plus
+# features = ["gui"] so it ships the real Iced GUI, not the headless stub.
 # ---------------------------------------------------------------------------
-
-# The CLI binary `fauxx-cli` ships as-is (default/headless build, no GUI libs).
-[dist.packages.fauxx-cli]
-dist = true
-
-# The desktop binary `fauxx-desktop` MUST be built with the `gui` feature, which
-# is a positive opt-in gate (default = []). Without it the binary links no
-# windowing stack and is not the shippable GUI. `features = ["gui"]` makes dist
-# pass `--features gui` for this package's build.
-[dist.packages.fauxx-desktop]
-dist = true
-features = ["gui"]

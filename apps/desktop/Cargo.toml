@@ -1,13 +1,21 @@
 [package]
 name = "fauxx-desktop"
 description = "Fauxx desktop companion GUI: an Iced MVU shell and system-tray agent, a thin client over fauxx-core."
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
 publish = false
+
+# `publish = false` keeps the app crates off crates.io. dist skips unpublished
+# packages by default, so opt this binary back in explicitly. The GUI is a
+# positive opt-in (default = []), so dist MUST build with the `gui` feature or
+# it would ship the headless stub instead of the real Iced GUI.
+[package.metadata.dist]
+dist = true
+features = ["gui"]
 
 [lints]
 workspace = true
