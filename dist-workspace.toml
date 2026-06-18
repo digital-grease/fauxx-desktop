@@ -1,0 +1,173 @@
+# Standalone `dist` (axodotdev, formerly cargo-dist) configuration for
+# fauxx-desktop (C0 #6: packaging + reproducible signed releases).
+#
+# This is a STANDALONE config on purpose. The root Cargo.toml is deliberately
+# left untouched: there is no [workspace.metadata.dist] table there. Keeping the
+# release orchestration in its own file means the Cargo manifest stays focused
+# on the build graph, and the whole dist layer can be swapped or removed without
+# editing any crate (see docs/RELEASING.md for the rationale and the "dist is an
+# orchestration convenience, not a reproducibility guarantee" caveat).
+#
+# License: AGPL-3.0-only. See LICENSE at the repo root. The release notes and
+# every generated installer carry this license (license = "AGPL-3.0-only" is
+# inherited from each crate's [workspace.package] license).
+#
+# Pinned tool version: dist 0.32.0 (2026-05-21). The pin is intentional and
+# matches the `curl ... /v0.32.0/...` install line in
+# .github/workflows/release.yml. axodotdev is a tiny team; we keep the version
+# pinned and the config thin and swappable rather than tracking head.
+
+[workspace]
+# The Rust workspace that owns the binaries. `dist` discovers the two shippable
+# binaries from the Cargo metadata: `fauxx` (apps/cli, package fauxx-cli) and
+# `fauxx-desktop` (apps/desktop, package fauxx-desktop, built with the `gui`
+# feature, see [dist.packages] below).
+members = ["cargo:."]
+
+[dist]
+# Records the dist version that owns this config, for reproducibility and so a
+# mismatched local `dist` refuses to silently regenerate with a different
+# schema. Keep this in lockstep with the installer URL in release.yml.
+cargo-dist-version = "0.32.0"
+
+# AGPL-3.0-only. Surfaced so the generated GitHub Release and the installer
+# metadata both carry the license. Crates inherit this from
+# [workspace.package].license; restating it here keeps the release artifacts
+# self-describing even if read in isolation.
+license = "AGPL-3.0-only"
+
+# CI backend. The generated workflow is committed at
+# .github/workflows/release.yml (we author/own that file directly rather than
+# round-tripping `dist generate`, since dist is not installed on the build box).
+ci = ["github"]
+
+# Per-OS artifacts for BOTH binaries across the required platform set:
+#   - x86_64 Linux        : x86_64-unknown-linux-gnu
+#   - macOS (Apple)       : aarch64-apple-darwin
+#   - macOS (Intel)       : x86_64-apple-darwin
+#   - x86_64 Windows      : x86_64-pc-windows-msvc
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+]
+
+# Installers plus archives. `shell` (curl | sh) and `powershell` (irm | iex)
+# are fetchers that download the per-OS archives; `dist` always also emits the
+# tar.xz / zip archives those installers point at, so every platform gets both
+# an installer and a downloadable archive.
+#
+# NOTE: the `msi` installer is intentionally NOT enabled here. dist's msi path
+# requires per-package [package.metadata.wix] metadata (a "manufacturer" and a
+# GUID) inside each crate's Cargo.toml, and this milestone may not edit the
+# crates. Enabling msi is tracked as a follow-up that belongs to the crate
+# owners (see docs/RELEASING.md, "Windows installer / MSI"). Windows users still
+# get a signed .exe inside the zip archive plus the powershell installer.
+installers = ["shell", "powershell"]
+
+# Emit a SHA256 checksum file per artifact. Users verify downloads against
+# these (and against the GitHub attestations, see below).
+checksum = "sha256"
+
+# Always publish the auto-generated source tarball alongside the release.
+# See docs/RELEASING.md for the explicit statement that this tarball is NOT
+# guaranteed to be bitwise reproducible by dist itself.
+source-tarball = true
+
+# Supply-chain evidence: enable GitHub's build provenance attestations. The
+# generated workflow signs each artifact with a Sigstore-backed in-toto
+# attestation via `actions/attest@v4`, verifiable with `gh attestation verify`.
+github-attestations = true
+
+# Trigger model. `dispatch-releases = true` adds the manual workflow_dispatch
+# trigger; the committed release.yml ALSO keeps the `v*` tag trigger, so a
+# release fires on a pushed `v*` tag OR a manual dispatch.
+dispatch-releases = true
+
+# Skip the heavy build matrix on pull requests (still runs `dist plan` to catch
+# config drift). Real artifact builds happen only on tag / dispatch.
+pr-run-mode = "plan"
+
+# Host downloads and announcements on the GitHub Release for this repo.
+hosting = ["github"]
+
+# Match `v*` tags (e.g. v0.1.0). The committed release.yml encodes the same
+# `v*` pattern in its `on.push.tags` block.
+tag-namespace = "v"
+
+# Some generated files (the committed CI workflow, and any future msi config)
+# are hand-maintained / divergent from a fresh `dist generate`, so allow them to
+# be "dirty" rather than failing the plan when dist is run locally to sanity
+# check.
+allow-dirty = ["ci", "msi"]
+
+# ---------------------------------------------------------------------------
+# Code signing.
+#
+# Both blocks are gated on repository secrets. When the secrets are absent (the
+# current state: this repo is private and the certs are not provisioned yet),
+# signing is skipped and the release still succeeds with unsigned binaries plus
+# the GitHub attestations above. Provisioning the secrets is a documented TODO
+# in docs/RELEASING.md, NOT a hard build dependency.
+# ---------------------------------------------------------------------------
+
+# Windows Authenticode signing via SSL.com eSigner (cloud signing, no local
+# HSM). dist signs the Windows .exe (and msi, once enabled) only when the four
+# SSLDOTCOM_* secrets are configured on the repo:
+#   SSLDOTCOM_USERNAME, SSLDOTCOM_PASSWORD, SSLDOTCOM_CREDENTIAL_ID,
+#   SSLDOTCOM_TOTP_SECRET
+# "prod" uses the production eSigner endpoint; switch to "test" for an SSL.com
+# sandbox credential. TODO(secrets): provision the SSL.com eSigner credential
+# and add the four secrets before the first public Windows release.
+ssldotcom-windows-sign = "prod"
+
+# macOS code signing + notarization.
+#
+# dist 0.32 does NOT yet expose a first-class macOS signing config key (upstream
+# axodotdev/cargo-dist#1121 is still open), so this is NOT a [dist] key. It is
+# wired in .github/workflows/release.yml as an OPTIONAL, secret-gated `codesign`
+# + `notarytool` step that runs only when the Apple Developer ID secrets are
+# present (APPLE_CERT_DATA, APPLE_CERT_PASSWORD, APPLE_SIGNING_IDENTITY,
+# APPLE_TEAM_ID, APPLE_API_KEY / APPLE_API_ISSUER). When those secrets are
+# absent the step is skipped and the macOS archive ships unsigned, gatekeeper
+# notwithstanding. TODO(secrets): provision the Apple Developer ID Application
+# cert + an App Store Connect API key, then add those secrets. Documented in
+# docs/RELEASING.md, "macOS code signing".
+
+# ---------------------------------------------------------------------------
+# Per-OS build dependencies (system libraries needed at build time).
+# ---------------------------------------------------------------------------
+
+# Linux: the desktop GUI (`fauxx-desktop` built with the `gui` feature) links
+# iced/winit, which need libxkbcommon and Wayland at build time. The Linux
+# keystore backend (dbus-secret-service, built with its vendored feature) pulls
+# libdbus headers. The SQLCipher store and its crypto are statically vendored
+# (rusqlite bundled-sqlcipher-vendored-openssl), so no system sqlite/openssl is
+# required. The CLI binary (`fauxx`) does not need the GUI libs, but installing
+# them on the shared Linux build host is harmless and keeps one runner image.
+[dist.dependencies.apt]
+libxkbcommon-dev = '*'
+libwayland-dev = '*'
+libdbus-1-dev = '*'
+pkg-config = '*'
+# The Linux tray is `ksni` (pure-Rust StatusNotifierItem over zbus), so the Linux
+# GUI build needs no GTK3 / xdotool / appindicator system libraries. tray-icon
+# (which pulls those via libappindicator/libxdo) is the Windows/macOS-only
+# backend and never builds its GTK3 path on the platforms that use it.
+
+# ---------------------------------------------------------------------------
+# Per-package overrides: which binaries ship, and with which features.
+# ---------------------------------------------------------------------------
+
+# The CLI binary `fauxx` ships as-is (default/headless build, no GUI libs).
+[dist.packages.fauxx-cli]
+dist = true
+
+# The desktop binary `fauxx-desktop` MUST be built with the `gui` feature, which
+# is a positive opt-in gate (default = []). Without it the binary links no
+# windowing stack and is not the shippable GUI. `features = ["gui"]` makes dist
+# pass `--features gui` for this package's build.
+[dist.packages.fauxx-desktop]
+dist = true
+features = ["gui"]

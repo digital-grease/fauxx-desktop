@@ -1,0 +1,108 @@
+name: Issue Labeler
+
+# Adds labels to new issues based on content signals (panic/crash markers, OS,
+# area). Belt-and-suspenders for the form-applied labels: covers issues filed via
+# the API, `gh issue create`, the "Other" Markdown fallback, or that bypass the
+# forms.
+#
+# Idempotent: re-running on the same issue does not error (gh issue edit
+# --add-label is a no-op if the label is already applied). Requires the referenced
+# labels to exist in the repo.
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  label:
+    name: Apply content-based labels
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply labels from issue title + body
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          TITLE: ${{ github.event.issue.title }}
+          BODY: ${{ github.event.issue.body }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          labels_to_add=()
+
+          # --- Crash / panic signals ---
+          if echo "$TITLE" | grep -qiE 'crash|crashed|crashing|panic'; then
+            labels_to_add+=("crash")
+          fi
+          if echo "$BODY" | grep -qE "panicked at|RUST_BACKTRACE|thread '[^']*' panicked|SIGSEGV|SIGABRT|core dumped"; then
+            labels_to_add+=("crash")
+          fi
+
+          # --- OS dropdown (form) ---
+          # The bug/crash forms render the dropdown as a "### OS\n\nLinux" section.
+          os_value=$(printf '%s\n' "$BODY" \
+            | awk '/^### OS$/{flag=1; next} flag && NF{print; flag=0}' \
+            | tr '[:upper:]' '[:lower:]' \
+            | tr -d '[:space:]' \
+            | head -c 32 || true)
+          case "$os_value" in
+            linux) labels_to_add+=("os:linux") ;;
+            macos) labels_to_add+=("os:macos") ;;
+            windows) labels_to_add+=("os:windows") ;;
+          esac
+
+          # --- OS content fallback (for "Other" / API-filed issues) ---
+          # Only strong markers, to avoid mislabeling an incidental mention.
+          if echo "$BODY" | grep -qE '\.exe\b|powershell|win32'; then
+            labels_to_add+=("os:windows")
+          fi
+          if echo "$BODY" | grep -qiE 'darwin|apple silicon|aarch64-apple|x86_64-apple'; then
+            labels_to_add+=("os:macos")
+          fi
+
+          # --- Area dropdown (form) ---
+          area_value=$(printf '%s\n' "$BODY" \
+            | awk '/^### Area$/{flag=1; next} flag && NF{print; flag=0}' \
+            | tr '[:upper:]' '[:lower:]' \
+            | tr -d '[:space:]' \
+            | head -c 32 || true)
+          case "$area_value" in
+            core|cli|gui|sync|browser|store|network|extension|packaging)
+              labels_to_add+=("area:$area_value")
+              ;;
+          esac
+
+          # --- Area content fallback ---
+          if echo "$BODY" | grep -qiE 'chromium|decoy browser|chromiumoxide|\bCDP\b|topics api'; then
+            labels_to_add+=("area:browser")
+          fi
+          if echo "$BODY" | grep -qiE 'pairing|paired|\bQR\b|sealed box|peer'; then
+            labels_to_add+=("area:sync")
+          fi
+          if echo "$BODY" | grep -qiE 'system tray|tray icon|iced|first-run wizard|the window'; then
+            labels_to_add+=("area:gui")
+          fi
+          if echo "$BODY" | grep -qiE 'native-host|native messaging|webextension|web extension|\bMV3\b'; then
+            labels_to_add+=("area:extension")
+          fi
+          if echo "$BODY" | grep -qiE 'proxy|egress|\bTor\b|\bDoH\b|\bDoT\b|\bVPN\b'; then
+            labels_to_add+=("area:network")
+          fi
+          if echo "$BODY" | grep -qiE 'keystore|sqlcipher|passphrase|migration|encrypted store'; then
+            labels_to_add+=("area:store")
+          fi
+          if echo "$BODY" | grep -qiE 'fauxx serve|homelab|\bMQTT\b|home assistant|systemd|docker'; then
+            labels_to_add+=("area:cli")
+          fi
+
+          # --- Dedup + apply ---
+          if [ "${#labels_to_add[@]}" -eq 0 ]; then
+            echo "No content-based labels matched; nothing to add."
+            exit 0
+          fi
+          unique_labels=$(printf '%s\n' "${labels_to_add[@]}" | sort -u | tr '\n' ',' | sed 's/,$//')
+          echo "Applying labels: $unique_labels"
+          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "$unique_labels"

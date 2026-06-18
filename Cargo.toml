@@ -1,0 +1,195 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/fauxx-core",
+    "apps/cli",
+    "apps/desktop",
+]
+
+[workspace.package]
+edition = "2021"
+# Matches rust-toolchain.toml (1.96.0). The encrypted store pulls libsqlite3-sys
+# 0.38.x whose build script uses `cfg_select!` (stabilized in 1.95), so the crate
+# does not actually build below 1.95; declare the real MSRV rather than 1.94.
+rust-version = "1.96"
+license = "AGPL-3.0-only"
+repository = "https://github.com/digital-grease/fauxx-desktop"
+authors = ["Digital Grease"]
+
+# Forbidden / discouraged constructs, enforced workspace-wide. Members opt in
+# with `[lints] workspace = true`. unsafe is forbidden outright; unwrap/expect/
+# todo are warnings that CI (`-D warnings`) promotes to errors.
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+todo = "warn"
+
+# Every dependency is pinned with `=` and a one-line rationale, per the house
+# convention (see cairn). Versions current as of 2026-06. Members reference
+# these with `{ workspace = true }`. New milestones add their crates here.
+[workspace.dependencies]
+# Async runtime. The headless core and CLI run on it; iced's `tokio` feature
+# reuses the same runtime in the GUI client (C0 #5).
+tokio = { version = "=1.52.3", features = ["rt-multi-thread", "macros", "sync", "time", "signal"] }
+# serde stack for the persona/measurement data model and the cross-device wire
+# schema (C1). Field names must mirror the Android SyntheticPersona exactly.
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.150"
+# Typed library errors (core) vs flexible application errors (binaries).
+thiserror = "=1.0.69"
+anyhow = "=1.0.102"
+# Structured logging. The core emits via the `tracing` facade; the binaries
+# install the subscriber so both clients log identically.
+tracing = "=0.1.44"
+tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
+# Rotating, bounded debug-log file for the bug-report path (persisted local logs
+# the user can export, scrubbed, to a GitHub issue). Used synchronously (not the
+# non_blocking writer) so a panic line is flushed before `panic = "abort"`.
+tracing-appender = "=0.2.3"
+# CLI / headless entrypoint (C0 #4). `env` lets flags fall back to env vars,
+# which the 24/7 homelab deployment (C8 #35) relies on.
+clap = { version = "=4.5.20", features = ["derive", "env"] }
+# GUI client (C0 #5). MIT-licensed, pure-Rust MVU. Behind the opt-in `gui`
+# feature so the default/CLI build links no windowing dependencies. The `tokio`
+# feature enables `Task::perform(spawn_blocking(...))` to keep the UI thread
+# free. Pinned to match cairn-desktop, which already ships 0.14.0.
+iced = { version = "=0.14.0", features = ["tokio"] }
+# System tray agent (C0 #5). The tray is split by OS to keep the Linux build off
+# the archived gtk-rs GTK3 stack: tray-icon (libappindicator -> GTK3 -> glib) is
+# used on Windows and macOS only, while Linux uses `ksni` below. Each app crate
+# wires them per-target; both are gated behind `gui`.
+tray-icon = "=0.24.1"
+# Linux system tray over the freedesktop StatusNotifierItem spec: pure Rust on
+# zbus (no GTK/glib, no C libdbus), so the Linux GUI graph carries none of the
+# unmaintained gtk-rs GTK3 crates nor the glib unsoundness. Default features =
+# [tokio], so it shares the GUI client's tokio runtime. Used on Linux only.
+ksni = "=0.3.5"
+# Native file dialogs for the GUI (wizard import, export paths). Gated behind
+# `gui`.
+rfd = "=0.15.4"
+
+# --- Encrypted store + keystore (C0 #3) ---
+# SQLCipher store. `bundled-sqlcipher-vendored-openssl` statically vendors both
+# SQLCipher and its crypto, so there is no per-OS system-lib hunting and the
+# release artifacts stay reproducible.
+rusqlite = { version = "=0.40.1", features = ["bundled-sqlcipher-vendored-openssl"] }
+# OS keystore for the DB key. The keyring-rs 4.x LIBRARY is keyring-core plus
+# per-OS backend store crates; the `keyring` umbrella crate (4.0.1) is a
+# CLI/sample crate that hard-depends on clap ^4.6.1 and collides with our
+# clap =4.5.20 pin, so it is deliberately NOT used. Members wire the per-OS
+# backends in target-specific blocks (Linux prefers the persistent D-Bus Secret
+# Service, with in-kernel keyutils as the no-D-Bus fallback; the durable
+# headless path is the Argon2id passphrase-file KeySource).
+keyring-core = "=1.0.0"
+dbus-secret-service-keyring-store = "=1.0.0"
+linux-keyutils-keyring-store = "=1.0.0"
+apple-native-keyring-store = "=1.0.0"
+windows-native-keyring-store = "=1.0.0"
+# Headless key fallback (no-D-Bus hosts, C8 #35): an Argon2id-derived key
+# encrypts a key file when the OS keystore is unavailable. Stable line, not the
+# 0.6 rc.
+argon2 = "=0.5.3"
+chacha20poly1305 = "=0.10.1"
+# Explicit zeroize of decrypted key material.
+zeroize = "=1.8.2"
+# Persona ids (UUID v4) for the persona model that mirrors the Android
+# SyntheticPersona.
+uuid = { version = "=1.23.3", features = ["v4", "serde"] }
+# Per-OS application data/config directories for the store and config paths.
+directories = "=6.0.0"
+# Object-safe async traits where the API needs `Box<dyn _>` backends (browser,
+# egress); concrete facades use inherent `async fn` and do not need this.
+async-trait = "=0.1.89"
+# Temp dirs for store tests (dev-dependency).
+tempfile = "=3.27.0"
+# CLI: graceful Ctrl-C shutdown for `agent run`, and hidden passphrase prompt
+# for unlocking the encrypted store on an interactive host (C0 #4, C8 #35).
+ctrlc = "=3.5.2"
+rpassword = "=7.5.4"
+
+# --- Cross-device sync (C1 #7 O1) ---
+# Pure-Rust NaCl: crypto_box sealed boxes for the libsodium-sealed persona
+# channel (the phone side, E13, must match this; sealed-box = crypto_box). No C
+# libsodium dependency, so cross-OS reproducible builds stay clean.
+dryoc = "=0.8.0"
+# Pure-Rust mDNS service registration + browsing for phone <-> desktop LAN
+# discovery (no Avahi/Bonjour system daemon).
+mdns-sd = "=0.20.0"
+# QR generation for out-of-band pairing (desktop shows a QR carrying its public
+# key + connection hint; the phone scans it).
+qrcode = "=0.14.1"
+# Compact text encoding of the public key / connection hint inside the QR
+# payload and the sealed envelope framing.
+base64 = "=0.22.1"
+# Seedable RNG for the household timeline scheduler (C1 #10 O4): staggering
+# jitter and Poisson-like inter-arrival sampling (derived from uniform draws,
+# mirroring the Android PoissonScheduler), with a fixed seed in tests.
+rand = "=0.10.1"
+
+# --- Real-browser integration (C2 #11 R1) ---
+# Drive a dedicated, isolated-but-real Chromium decoy profile over CDP. Default
+# features = [bytes] only: the `fetcher` (browser auto-download) is left OFF (we
+# use the system Chromium), which also keeps its `native-tls` out of the graph
+# (deny.toml bans native-tls; prefer rustls).
+chromiumoxide = "=0.9.1"
+# chromiumoxide's `Handler` is a `futures::stream::Stream` pumped via
+# `StreamExt::next()`; this is its own transitive async-plumbing crate, pinned to
+# the exact resolved version so the graph gains no new distinct version.
+futures-util = { version = "=0.3.32", default-features = false, features = ["std"] }
+
+# --- Deterministic-channel defense (C3) ---
+# Date math + formatting for DSAR statutory deadlines (C3 #16 D2c): GDPR one
+# month, CCPA 45 days, computed from the send date. Pure-Rust, no native deps.
+time = { version = "=0.3.47", features = ["formatting", "parsing", "macros"] }
+
+# --- Measurement & analytics (C4) ---
+# Statistical distributions (Student-t / normal CDF) for the control-profile A/B
+# significance measure (C4 #21 A2); KL-divergence and effect size are plain std
+# math. Pure-Rust.
+statrs = "=0.18.0"
+# Efficacy-snapshot export (C4 #23 A4): CSV writer for the underlying time-series
+# and per-category drift data. Pure-Rust.
+csv = "=1.4.0"
+# PDF export (C4 #23 A4): a human-readable, dated efficacy snapshot. Pure-Rust
+# (no native deps); uses the built-in standard fonts (no bundled TTF).
+# default-features = false drops the heavy `html` default (azul/kuchiki layout
+# graph) we do not use: the export only places text with built-in fonts.
+printpdf = { version = "=0.9.1", default-features = false }
+
+# --- Orchestration & UX (C8 #36 U5) ---
+# MQTT client for the Home Assistant integration (status/efficacy sensors +
+# command topic). Pure-Rust, no TLS stack by default (LAN HA is plain TCP; a
+# rustls feature can be added later). fauxx-core references this as an OPTIONAL
+# dep behind an off-by-default `mqtt` feature (cinder RumqttcBridge pattern), so
+# the default headless build does not link it.
+rumqttc = { version = "=0.25.1", default-features = false }
+
+# --- Persona studio (C5 #27 P4) + heavy compute (C6) ---
+# ed25519 signing/verification for signed persona packs (P4) and the generated
+# query-plan / weight-map / PUMS-pack artifacts pushed to the phone (C6). Pinned
+# to the stable 2.x (not the 3.0 rc). Keys are built via `from_bytes` over a
+# dryoc-random 32-byte seed, so ed25519-dalek's rand_core-based generate() is not
+# used and we avoid needing rand_core 0.6 as a direct dep (it would clash with
+# rand 0.10's rand_core 0.9).
+ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["std", "fast", "zeroize"] }
+
+# --- Search-decoy query generation (C6 H1) ---
+# The harmful-query safety blocklist (ported from the Android `QueryBlocklist`)
+# matches both phrase terms and `regex_patterns`, and canonicalizes input with
+# Unicode NFKC before matching so fullwidth/ligature evasion cannot smuggle a
+# harmful phrase past the guard. `regex` runs the blocklist's regex patterns;
+# `unicode-normalization` does the NFKC fold. Both are pure-Rust, MIT/Apache.
+regex = { version = "=1.12.4", default-features = false, features = ["std", "unicode"] }
+unicode-normalization = "=0.1.25"
+
+# Hardened, reproducibility-friendly release profile (mirrors cairn). The
+# byte-for-byte reproducibility work (SOURCE_DATE_EPOCH, path remap) lands in
+# C0 #6; these flags are the baseline.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

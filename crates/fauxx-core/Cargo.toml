@@ -1,0 +1,161 @@
+[package]
+name = "fauxx-core"
+description = "Fauxx desktop companion headless core: all real work behind a clean async API, with the Iced GUI and clap CLI as thin clients over it."
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[features]
+# Off by default. The Home Assistant / MQTT integration (C8 #36 U5): the real
+# `RumqttcBridge` is gated here so the default headless build links no MQTT
+# client (the `MockMqtt` + the `MqttBridge` trait compile without rumqttc). The
+# cinder RumqttcBridge pattern: one shared AsyncClient + EventLoop, one poll
+# task, a cloned publish handle (never an Arc<Mutex>), a down broker degrades.
+mqtt = ["dep:rumqttc"]
+
+[dependencies]
+# The workspace tokio carries rt/macros/sync/time/signal; the C1 #7 TCP sync
+# transport additionally needs `net` (TcpListener/TcpStream) and `io-util`
+# (AsyncRead/WriteExt). Features are additive across the workspace, so requesting
+# them here does not change any other crate.
+tokio = { workspace = true, features = ["net", "io-util"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+# Persisted debug logging + the scrubbed bug-report export live in
+# `fauxx_core::logging`; the binaries call `logging::init()`, so the core owns
+# the subscriber + rotating-file-appender machinery.
+tracing-subscriber = { workspace = true }
+tracing-appender = { workspace = true }
+# Encrypted store + keystore (C0 #3).
+rusqlite = { workspace = true }
+argon2 = { workspace = true }
+chacha20poly1305 = { workspace = true }
+zeroize = { workspace = true }
+uuid = { workspace = true }
+directories = { workspace = true }
+async-trait = { workspace = true }
+
+# --- Cross-device sync (C1 #7 O1) ---
+# Pure-Rust NaCl: crypto_box authenticated public-key encryption for the sealed
+# persona channel (the phone side, E13, matches this). No C libsodium dependency.
+dryoc = { workspace = true }
+# Pure-Rust mDNS service registration + browsing for phone <-> desktop LAN
+# discovery (no Avahi/Bonjour system daemon). Behind the concrete transport so
+# the in-memory tests stay hermetic.
+mdns-sd = { workspace = true }
+# QR generation for out-of-band pairing (the desktop renders its public key +
+# connection hint; the phone scans it). We use the always-available unicode
+# renderer plus `svg`; the root pin carries default features (including the
+# `image` PNG renderer), which `default-features` here cannot override because
+# the workspace dependency does not opt out, so it is referenced plainly.
+qrcode = { workspace = true }
+# Compact text encoding of the QR payload and the sealed envelope framing.
+base64 = { workspace = true }
+
+# --- Cross-device persona orchestration (C1 #8/#9/#10) ---
+# Seedable RNG for the household timeline scheduler (C1 #10 O4): staggering
+# jitter and Poisson-like inter-arrival sampling (derived from uniform draws,
+# mirroring the Android PoissonScheduler). Tests fix the seed (StdRng via
+# seed_from_u64) so the cadence is deterministic and verifiable headlessly.
+# Also seeds the persona-derived browsing cadence (dwell/scroll) in `browser`.
+rand = { workspace = true }
+
+# --- Real-browser integration (C2 #11 R1 / #13 R3) ---
+# Drive a dedicated, isolated decoy Chromium profile over CDP. Default features
+# = [bytes] only: the `fetcher` (browser auto-download) and its `native-tls` are
+# left OFF (we use the system Chromium; deny.toml bans native-tls). Pinned in the
+# root [workspace.dependencies], referenced here per the house convention.
+chromiumoxide = { workspace = true }
+# chromiumoxide's `Handler` is a `futures::stream::Stream` that MUST be polled to
+# pump the CDP connection; `StreamExt::next()` drives it on a tokio task. Pinned
+# in the root [workspace.dependencies] per the house convention.
+futures-util = { workspace = true }
+
+# --- Deterministic-channel defense (C3 #16 D2c) ---
+# Date math + formatting for DSAR statutory deadlines: GDPR one calendar month
+# (same day next month, clamped for short months), CCPA 45 days, computed from
+# the send date. Pure-Rust, no native deps. Pinned in the root
+# [workspace.dependencies] per the house convention.
+time = { workspace = true }
+
+# --- Measurement & analytics (C4 #21 A2) ---
+# Statistical distributions (the Student-t CDF) for the control-profile A/B
+# significance measure: the two-sample t-test p-value. KL-divergence (C4 #20 A1)
+# and Cohen's d effect size are plain std f64 math and need no crate. Pure-Rust;
+# pinned in the root [workspace.dependencies] per the house convention.
+statrs = { workspace = true }
+
+# --- Efficacy-snapshot export (C4 #23 A4) ---
+# CSV writer for the underlying drift time-series + per-category drift rows.
+# Pure-Rust. Pinned in the root [workspace.dependencies] per the house
+# convention.
+csv = { workspace = true }
+# PDF writer for the human-readable, dated efficacy snapshot. We use printpdf's
+# BUILT-IN standard fonts (Helvetica) only, so no TTF is bundled and no extra
+# dependency is added. Pure-Rust; pinned in the root [workspace.dependencies]
+# per the house convention.
+printpdf = { workspace = true }
+
+# --- Persona studio: signed persona packs (C5 #27 P4) ---
+# ed25519 signing/verification for the import/export signed persona packs. The
+# pack-signing key is generated from OS randomness via SigningKey::from_bytes
+# over a 32-byte seed produced by dryoc's copy_randombytes, so no rand_core
+# dependency is pulled (ed25519-dalek 2.2 wants rand_core 0.6, which would clash
+# with rand 0.10's rand_core 0.9). The serde feature is deliberately NOT enabled
+# (it emits byte arrays); public keys and signatures are carried in the pack JSON
+# as base64 strings. Pinned in the root [workspace.dependencies] per the house
+# convention.
+ed25519-dalek = { workspace = true }
+
+# --- Search-decoy query generation (C6 H1) ---
+# `regex` runs the harmful-query blocklist's `regex_patterns`; the rest of the
+# blocklist is phrase-substring matching. `unicode-normalization` NFKC-folds
+# query + blocklist terms before matching so fullwidth/ligature evasion cannot
+# slip a harmful phrase past the guard. Both pure-Rust; pinned in the root
+# [workspace.dependencies] per the house convention.
+regex = { workspace = true }
+unicode-normalization = { workspace = true }
+
+# --- Orchestration & UX: Home Assistant / MQTT hooks (C8 #36 U5) ---
+# MQTT client for the Home Assistant integration (status/efficacy discovery
+# sensors + a campaign command topic). OPTIONAL and behind the off-by-default
+# `mqtt` feature (see [features] above): the default headless build links no MQTT
+# client at all (the MockMqtt + the MqttBridge trait compile without it), and
+# only `--features mqtt` pulls rumqttc and builds the real RumqttcBridge. Pinned
+# (no default features, so no TLS stack) in the root [workspace.dependencies] per
+# the house convention.
+rumqttc = { workspace = true, optional = true }
+
+# --- OS keystore (C0 #3) ---
+# keyring-rs 4.x library = keyring-core + per-OS backend store crates (pins live
+# in the root [workspace.dependencies]; the `keyring` umbrella crate is avoided
+# because it hard-depends on clap ^4.6.1 and collides with our clap =4.5.20).
+keyring-core = { workspace = true }
+
+# Linux: prefer the persistent D-Bus Secret Service backend (gnome-keyring /
+# KWallet). `crypto-rust` uses pure-Rust crypto (no system OpenSSL hunt) and
+# `vendored` statically links libdbus, keeping release artifacts reproducible.
+# keyutils is the always-available in-kernel fallback for headless boxes; note
+# it is session-scoped (does not survive reboot), which is why the Argon2id
+# passphrase-file KeySource is the durable headless path.
+[target.'cfg(target_os = "linux")'.dependencies]
+dbus-secret-service-keyring-store = { workspace = true, features = ["crypto-rust", "vendored"] }
+linux-keyutils-keyring-store = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store = { workspace = true, features = ["keychain", "protected"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-native-keyring-store = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

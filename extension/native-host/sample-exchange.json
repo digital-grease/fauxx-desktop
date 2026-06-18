@@ -1,0 +1,95 @@
+{
+  "_comment": "A concrete sample of the native-messaging exchange this WebExtension speaks. Not loaded at runtime; it is a reference for the deferred Rust host. Every message is a single JSON object framed by the platform's native-messaging length-prefix. See extension/PROTOCOL.md for the full contract.",
+
+  "1_host_to_extension_hello": {
+    "v": 1,
+    "type": "hello",
+    "coreVersion": "0.1.0",
+    "schemaVersion": 1
+  },
+
+  "2_extension_to_host_ready": {
+    "v": 1,
+    "type": "ready",
+    "extensionVersion": "0.1.0",
+    "schemaVersion": 1
+  },
+
+  "3_host_to_extension_decoyPlan": {
+    "v": 1,
+    "type": "decoyPlan",
+    "planId": "9f1c2d3e-0000-4000-8000-000000000001",
+    "personaId": "persona-tech-traveler",
+    "intent": "decoy",
+    "intensity": "Medium",
+    "targetSegment": "TECHNOLOGY",
+    "categories": ["TECHNOLOGY", "TRAVEL"],
+    "targets": [],
+    "mode": "fetch",
+    "gpc": true,
+    "maxTargets": 6,
+    "seed": 42
+  },
+
+  "4_extension_to_host_decoyReport": {
+    "v": 1,
+    "type": "decoyReport",
+    "planId": "9f1c2d3e-0000-4000-8000-000000000001",
+    "personaId": "persona-tech-traveler",
+    "seed": 42,
+    "visited": [
+      "https://www.theverge.com/",
+      "https://arstechnica.com/",
+      "https://techcrunch.com/",
+      "https://www.lonelyplanet.com/"
+    ],
+    "skipped": [
+      {
+        "url": "https://www.tripadvisor.com/",
+        "reason": "TypeError: Failed to fetch"
+      }
+    ],
+    "startedAt": 1765600000000,
+    "finishedAt": 1765600032000
+  },
+
+  "5_host_to_extension_checkGpc": {
+    "v": 1,
+    "type": "checkGpc",
+    "origin": "https://www.nytimes.com"
+  },
+
+  "6_extension_to_host_gpcStatus": {
+    "v": 1,
+    "type": "gpcStatus",
+    "origin": "https://www.nytimes.com",
+    "support": {
+      "honored": true,
+      "lastUpdate": "2022-06-01"
+    }
+  },
+
+  "7_extension_to_host_topicsReadback": {
+    "v": 1,
+    "type": "topicsReadback",
+    "personaId": "persona-tech-traveler",
+    "decoyId": "ext-decoy-default",
+    "readback": {
+      "available": true,
+      "topics": [
+        {
+          "topic": 57,
+          "configVersion": "chrome.1",
+          "modelVersion": "2206021246",
+          "taxonomyVersion": "1",
+          "name": "/Arts & Entertainment"
+        }
+      ]
+    }
+  },
+
+  "8_host_to_extension_stop": {
+    "v": 1,
+    "type": "stop"
+  }
+}

@@ -1,0 +1,61 @@
+[package]
+name = "fauxx-desktop"
+description = "Fauxx desktop companion GUI: an Iced MVU shell and system-tray agent, a thin client over fauxx-core."
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "fauxx-desktop"
+path = "src/main.rs"
+
+# The GUI is OFF by default. A plain `cargo build` (and the CLI) link no
+# windowing/system-lib crates; `gui` is a POSITIVE opt-in gate, so a forgotten
+# flag can never pull iced or a tray backend into the default graph (CI's
+# feature-leak guard enforces this). The Iced MVU shell + tray land in C0 #5. The
+# tray backend is per-OS (see the [target...] tables below): ksni on Linux,
+# tray-icon on Windows/macOS, so `dep:tray-icon`/`dep:ksni` each activate only on
+# their platform.
+[features]
+default = []
+gui = ["dep:iced", "dep:tray-icon", "dep:ksni", "dep:rfd", "dep:directories", "dep:uuid"]
+
+[dependencies]
+fauxx-core = { path = "../../crates/fauxx-core" }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+# GUI-only dependencies, activated solely by the `gui` feature.
+# `svg` is added on top of the workspace pin so the Devices/Wizard views can
+# render the crisp pairing QR via `iced::widget::svg`; `canvas` is added so the
+# C4 efficacy dashboard and the C5 week-simulator preview can draw their charts
+# on `iced::widget::Canvas` (both features only pull rendering surfaces and stay
+# gated behind `gui`).
+iced = { workspace = true, optional = true, features = ["svg", "canvas"] }
+# The system tray is a per-OS optional dependency (see the [target...] tables at
+# the end of this file): tray-icon on Windows/macOS, ksni on Linux. Both are
+# activated by `gui`.
+# Native file dialogs for C5 #27 persona-pack import/export.
+rfd = { workspace = true, optional = true }
+# Per-OS config directory, used only to persist the C8 #34 U3
+# first-run-completed marker file (the core exposes no generic GUI setting KV).
+directories = { workspace = true, optional = true }
+# UUID v4 generation for new C8 #33 U2 campaign ids, minted off the GUI thread.
+# GUI-only (the default GUI-free build links none of this).
+uuid = { workspace = true, optional = true }
+
+# Per-OS system-tray backend, both activated by the `gui` feature. Splitting
+# these into target tables keeps the Linux build off tray-icon's archived gtk-rs
+# GTK3 stack (it uses ksni over zbus instead), and keeps the Windows/macOS builds
+# off ksni. The default (GUI-free) build links neither.
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+tray-icon = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+ksni = { workspace = true, optional = true }

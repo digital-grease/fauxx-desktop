@@ -1,0 +1,50 @@
+[package]
+name = "fauxx-cli"
+description = "Fauxx desktop companion CLI / headless entrypoint. A thin clap client over fauxx-core."
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "fauxx"
+path = "src/main.rs"
+
+[features]
+# Off by default so the standard homelab build links no MQTT client. Enabling it
+# turns on the `fauxx-core` `mqtt` feature (the cinder RumqttcBridge), so
+# `fauxx serve --mqtt` can start the Home Assistant bridge. Build with
+# `cargo build -p fauxx-cli --features mqtt`. See docs/DEPLOYMENT.md.
+mqtt = ["fauxx-core/mqtt"]
+
+[dependencies]
+fauxx-core = { path = "../../crates/fauxx-core" }
+clap = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+# Graceful SIGINT shutdown for `fauxx run` and `fauxx serve` (C8 #35).
+ctrlc = { workspace = true }
+# Hidden passphrase prompt for unlocking the encrypted store on an interactive
+# host (`--prompt-passphrase` / `--passphrase-file -`).
+rpassword = { workspace = true }
+# Serialize Status / personas / command outputs for the `--json` paths, and
+# parse the `fauxx serve` JSON config file (C8 #35).
+serde_json = { workspace = true }
+# Serde derive for the `fauxx serve` config schema (C8 #35).
+serde = { workspace = true }
+# Generate UUID v4 ids for `persona add`, `ab define`, and `campaign create`.
+uuid = { workspace = true }
+# Per-OS config-dir search path for the `fauxx serve` config file (C8 #35).
+directories = { workspace = true }
+
+[dev-dependencies]
+# Hermetic temp stores for the integration tests across the command groups.
+tempfile = { workspace = true }

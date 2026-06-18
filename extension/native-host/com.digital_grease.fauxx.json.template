@@ -1,0 +1,12 @@
+{
+  "name": "com.digital_grease.fauxx",
+  "description": "Fauxx Core native-messaging host (decoy plans + activity reports). DEFERRED: the Rust host that satisfies this manifest is a documented follow-up; see extension/PROTOCOL.md.",
+  "path": "/REPLACE/WITH/ABSOLUTE/PATH/TO/fauxx-native-host",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://REPLACE_WITH_UNPACKED_EXTENSION_ID/"
+  ],
+  "allowed_extensions": [
+    "fauxx-decoy@digital-grease.github.io"
+  ]
+}

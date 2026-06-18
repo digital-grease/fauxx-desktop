@@ -1,0 +1,18 @@
+{
+  "dbPath": "/var/lib/fauxx/fauxx.db",
+  "passphraseFile": "/var/lib/fauxx/passphrase",
+  "keyFile": "/var/lib/fauxx/fauxx.db.key",
+  "tickIntervalSecs": 60,
+  "lanSync": false,
+  "syncPort": 45999,
+  "mqtt": {
+    "enabled": false,
+    "host": "homeassistant.lan",
+    "port": 1883,
+    "baseTopic": "fauxx",
+    "discoveryPrefix": "homeassistant",
+    "deviceId": "fauxx_desktop",
+    "username": null,
+    "password": null
+  }
+}

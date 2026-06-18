@@ -1,0 +1,68 @@
+# fauxx-desktop: Fauxx Desktop Companion
+# Copyright (C) 2026 Digital Grease
+#
+# This program is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, either version 3 of the License, or (at your option) any
+# later version. See <https://www.gnu.org/licenses/>.
+#
+# systemd unit for the Fauxx headless homelab mode (C8 #35). Runs the `fauxx
+# serve` long-running loop as a NON-root system user, restarts on failure, and
+# is enabled on boot. Install and enable per docs/DEPLOYMENT.md.
+#
+# Expectations:
+#   - the `fauxx` binary is installed at /usr/local/bin/fauxx,
+#   - a dedicated unprivileged user/group `fauxx` exists,
+#   - its state lives under /var/lib/fauxx (the store, key file, passphrase
+#     file), owned by that user and mode 0700,
+#   - the serve config lives at /etc/fauxx/serve.json.
+
+[Unit]
+Description=Fauxx Desktop Companion (headless serve mode)
+Documentation=https://github.com/digital-grease/fauxx-desktop
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=fauxx
+Group=fauxx
+
+# The serve config points at the store, the key file, and the passphrase file
+# (the headless Argon2id passphrase-file key source). No interactive prompt.
+ExecStart=/usr/local/bin/fauxx serve --config /etc/fauxx/serve.json
+Environment=RUST_LOG=info
+
+# Restart on failure (a crash or a fail-closed store-open error), with a small
+# backoff so a persistently broken config does not hot-loop.
+Restart=on-failure
+RestartSec=10
+
+# State directory: systemd creates and chowns /var/lib/fauxx to the service
+# user on start (mode 0700), the durable home for the encrypted store + keys.
+StateDirectory=fauxx
+StateDirectoryMode=0700
+
+# Graceful SIGINT shutdown (the serve loop installs a ctrlc handler). systemd
+# sends SIGTERM by default; map stop to SIGINT so the handler runs.
+KillSignal=SIGINT
+TimeoutStopSec=30
+
+# Hardening: this is a thin client with no need for elevated access. These
+# directives are conservative and safe for a 100%-local, no-inbound-port daemon.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/fauxx
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

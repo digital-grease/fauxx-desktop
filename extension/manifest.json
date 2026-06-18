@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "Fauxx Decoy Companion",
+  "version": "0.1.0",
+  "description": "Opt-in, secondary in-browser decoy injection for the Fauxx privacy companion. Decoy-only; never touches real accounts or sign-in flows.",
+  "author": "Digital Grease",
+  "homepage_url": "https://github.com/digital-grease/fauxx-desktop",
+  "minimum_chrome_version": "120",
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Fauxx Decoy Companion",
+    "default_popup": "popup/popup.html"
+  },
+  "options_ui": {
+    "page": "popup/popup.html",
+    "open_in_tab": true
+  },
+  "permissions": [
+    "storage",
+    "alarms",
+    "nativeMessaging",
+    "declarativeNetRequestWithHostAccess"
+  ],
+  "host_permissions": [
+    "https://*/*"
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "gpc_ruleset",
+        "enabled": true,
+        "path": "src/gpc_rules.json"
+      }
+    ]
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "fauxx-decoy@digital-grease.github.io",
+      "strict_min_version": "128.0"
+    }
+  }
+}

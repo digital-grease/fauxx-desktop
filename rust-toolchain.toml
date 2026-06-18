@@ -1,0 +1,7 @@
+[toolchain]
+# 1.96.0: the encrypted store pulls libsqlite3-sys 0.38.x (via rusqlite 0.40),
+# whose build script uses the `cfg_select!` macro stabilized in Rust 1.95. Pin
+# at or above that so the vendored-SQLCipher build compiles.
+channel = "1.96.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

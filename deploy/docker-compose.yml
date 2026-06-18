@@ -1,0 +1,40 @@
+# fauxx-desktop: Fauxx Desktop Companion
+# Copyright (C) 2026 Digital Grease
+#
+# This program is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, either version 3 of the License, or (at your option) any
+# later version. See <https://www.gnu.org/licenses/>.
+#
+# Compose example for the Fauxx headless homelab mode (C8 #35). Builds the image
+# from deploy/Dockerfile, runs `fauxx serve` as the non-root container user, and
+# persists the encrypted store + keys in a named volume. See docs/DEPLOYMENT.md.
+#
+# Run from the repository root:
+#   docker compose -f deploy/docker-compose.yml up -d --build
+
+services:
+  fauxx:
+    build:
+      # Build context is the repository root so the whole workspace is available
+      # to the build stage.
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        # Set to "mqtt" to build with the Home Assistant bridge.
+        FEATURES: ""
+    image: fauxx-desktop:latest
+    container_name: fauxx
+    restart: on-failure
+    environment:
+      RUST_LOG: info
+    volumes:
+      # Durable home for the encrypted store, key file, and passphrase file.
+      - fauxx-state:/var/lib/fauxx
+      # The serve config (read-only). Copy deploy/serve.example.json and edit.
+      - ./serve.json:/etc/fauxx/serve.json:ro
+    # No inbound ports: the companion is 100% local and reaches out only for its
+    # decoy work and (optionally) the LAN MQTT broker.
+
+volumes:
+  fauxx-state:

@@ -1,0 +1,75 @@
+# Reproducibility verification (C0 #6): proves the release build is byte-identical
+# across two INDEPENDENT rebuilds, the acceptance criterion the release pipeline
+# itself only documents. Manual-dispatch only, so it never slows the normal CI on
+# every push; run it before cutting a release (or on demand) to confirm the
+# determinism levers still hold.
+#
+# It checks out the repo TWICE into different paths and builds the headless `fauxx`
+# binary in each with the same levers the release uses: a pinned toolchain
+# (1.96.0), --locked deps, SOURCE_DATE_EPOCH, CARGO_INCREMENTAL=0, and a
+# --remap-path-prefix that maps each checkout's distinct path to the same /build
+# (so the differing source paths do not leak into the binary). Identical sha256
+# over the two binaries is the proof; a mismatch fails the job and points at the
+# nondeterminism to fix.
+#
+# Scope note: this verifies the CLI binary on one OS/runner (the achievable,
+# automatable guarantee). A fuller cross-machine independent rebuild is the manual
+# procedure in docs/RELEASING.md.
+
+name: Reproducibility check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  byte-identical:
+    runs-on: ubuntu-24.04
+    env:
+      SOURCE_DATE_EPOCH: "1"
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - name: Checkout build A
+        uses: actions/checkout@v4
+        with:
+          path: build-a
+          submodules: recursive
+      - name: Checkout build B
+        uses: actions/checkout@v4
+        with:
+          path: build-b
+          submodules: recursive
+      - name: Install the pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.96.0"
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev libxkbcommon-dev libwayland-dev
+      - name: Build A (release, locked, path-remapped)
+        working-directory: build-a
+        env:
+          RUSTFLAGS: "--remap-path-prefix=${{ github.workspace }}/build-a=/build"
+        run: cargo build --release --locked --bin fauxx
+      - name: Build B (release, locked, path-remapped)
+        working-directory: build-b
+        env:
+          RUSTFLAGS: "--remap-path-prefix=${{ github.workspace }}/build-b=/build"
+        run: cargo build --release --locked --bin fauxx
+      - name: Compare byte-for-byte
+        run: |
+          a="build-a/target/release/fauxx"
+          b="build-b/target/release/fauxx"
+          sha_a="$(sha256sum "$a" | cut -d' ' -f1)"
+          sha_b="$(sha256sum "$b" | cut -d' ' -f1)"
+          echo "build A sha256 = $sha_a"
+          echo "build B sha256 = $sha_b"
+          if [ "$sha_a" != "$sha_b" ]; then
+            echo "::error::release build is NOT byte-identical across independent rebuilds"
+            cmp "$a" "$b" || true
+            exit 1
+          fi
+          echo "byte-identical reproducibility confirmed: $sha_a"

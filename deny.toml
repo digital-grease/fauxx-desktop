@@ -1,0 +1,93 @@
+# cargo-deny policy for fauxx-desktop.
+#
+# Supply-chain hygiene enforced in CI: dependencies are license-allow-listed
+# (not deny-listed), known-vulnerable/yanked crates fail the build, and weak or
+# C-linking TLS stacks are banned in favor of rustls / RustCrypto. This keeps
+# cross-OS reproducible builds clean and the trust posture honest.
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+# Fail on any known vulnerability or yanked crate.
+yanked = "deny"
+# Ignored advisories are all UNMAINTAINED (not vulnerabilities) on TRANSITIVE
+# deps we cannot replace without dropping a capability, each documented:
+ignore = [
+    # The gtk-rs GTK3 family + proc-macro-error below are UNMAINTAINED (not
+    # vulnerabilities). IMPORTANT: no shipped binary links them anymore. The
+    # Linux tray moved to the pure-Rust `ksni` (StatusNotifierItem over zbus), and
+    # on Windows/macOS `tray-icon` never used its GTK3 backend (libappindicator is
+    # tray-icon's Linux-only path). They survive ONLY as a lockfile / cargo-deny
+    # artifact: `tray-icon` (our Windows/macOS tray) declares its Linux
+    # libappindicator -> GTK3 backend unconditionally in its own manifest, and the
+    # target-agnostic Cargo.lock (and cargo-deny's per-edge cfg union) keep that
+    # never-built edge. They cannot be dropped while tray-icon is the
+    # Windows/macOS tray; a real per-target build links none of them.
+    "RUSTSEC-2024-0412", # gdk
+    "RUSTSEC-2024-0413", # atk
+    "RUSTSEC-2024-0415", # gdk-sys
+    "RUSTSEC-2024-0416", # atk-sys
+    "RUSTSEC-2024-0418", # gtk
+    "RUSTSEC-2024-0419", # gtk-sys
+    "RUSTSEC-2024-0420", # gtk3-macros
+    "RUSTSEC-2024-0370", # proc-macro-error (via gtk3-macros)
+    # `paste` (proc-macro), unmaintained but inert at runtime; pulled by the
+    # macOS Metal backend (metal -> paste) under wgpu/iced. No maintained
+    # drop-in replacement.
+    "RUSTSEC-2024-0436",
+    # NOTE: the tokio broadcast unsoundness (RUSTSEC-2025-0023) is fixed by the
+    # patched tokio pin (root Cargo.toml), not ignored.
+]
+
+[licenses]
+version = 2
+# Allow-list, not deny-list. Anything else blocks the build until added here
+# with a documented justification in the PR. The list is tuned as dependencies
+# land across milestones; the first green CI run is the forcing function.
+allow = [
+    # The project's own license. Workspace crates are AGPLv3.
+    "AGPL-3.0-only",
+    # Permissive licenses for dependencies.
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Zlib",
+    "CC0-1.0",
+    # Public-domain dedication (SPDX `Unlicense`); used by `ksni` (the Linux
+    # StatusNotifierItem tray backend).
+    "Unlicense",
+    # Weak-copyleft, file-scoped; common in the desktop/GUI dependency tree
+    # (for example `option-ext` pulled via `dirs`).
+    "MPL-2.0",
+    # Boost Software License: permissive, OSI-approved, AGPL-compatible. Pulled
+    # by `clipboard-win` / `error-code` via iced's clipboard (iced_winit).
+    "BSL-1.0",
+]
+confidence-threshold = 0.93
+
+[bans]
+# Duplicate versions are a supply-chain smell. Start at warn; tighten per-crate
+# with a documented justification as the tree stabilizes.
+multiple-versions = "warn"
+wildcards = "deny"
+# Intra-workspace path deps (e.g. fauxx-core in apps/*) have no version req and
+# would otherwise be flagged as wildcards; allow those while still denying real
+# `*` version requirements on external crates.
+allow-wildcard-paths = true
+highlight = "all"
+deny = [
+    { crate = "openssl", reason = "Prefer rustls / RustCrypto. Add an exception with justification if a dependency hard-requires it." },
+    { crate = "native-tls", reason = "Prefer rustls. Add an exception with justification if required." },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

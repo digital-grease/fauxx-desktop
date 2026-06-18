@@ -1,0 +1,162 @@
+{
+  "MEDICAL": [
+    "https://www.mayoclinic.org/",
+    "https://medlineplus.gov/",
+    "https://www.webmd.com/"
+  ],
+  "LEGAL": [
+    "https://www.law.cornell.edu/",
+    "https://www.nolo.com/",
+    "https://www.findlaw.com/"
+  ],
+  "AUTOMOTIVE": [
+    "https://www.caranddriver.com/",
+    "https://www.motortrend.com/",
+    "https://www.edmunds.com/"
+  ],
+  "PARENTING": [
+    "https://www.healthychildren.org/",
+    "https://www.parents.com/",
+    "https://www.zerotothree.org/"
+  ],
+  "RETIREMENT": [
+    "https://www.aarp.org/",
+    "https://www.ssa.gov/",
+    "https://www.investopedia.com/retirement-4427776"
+  ],
+  "GAMING": [
+    "https://www.ign.com/",
+    "https://www.polygon.com/",
+    "https://www.eurogamer.net/"
+  ],
+  "AGRICULTURE": [
+    "https://www.nass.usda.gov/",
+    "https://www.farmprogress.com/",
+    "https://www.agriculture.com/"
+  ],
+  "FASHION": [
+    "https://www.vogue.com/",
+    "https://www.gq.com/",
+    "https://www.harpersbazaar.com/"
+  ],
+  "ACADEMIC": [
+    "https://scholar.google.com/",
+    "https://www.jstor.org/",
+    "https://arxiv.org/"
+  ],
+  "REAL_ESTATE": [
+    "https://www.realtor.com/",
+    "https://www.zillow.com/",
+    "https://www.redfin.com/"
+  ],
+  "COOKING": [
+    "https://www.allrecipes.com/",
+    "https://www.seriouseats.com/",
+    "https://www.bonappetit.com/"
+  ],
+  "SPORTS": [
+    "https://www.espn.com/",
+    "https://www.bbc.com/sport",
+    "https://www.cbssports.com/"
+  ],
+  "FINANCE": [
+    "https://www.investopedia.com/",
+    "https://www.bloomberg.com/",
+    "https://www.morningstar.com/"
+  ],
+  "TRAVEL": [
+    "https://www.lonelyplanet.com/",
+    "https://www.tripadvisor.com/",
+    "https://www.nationalgeographic.com/travel"
+  ],
+  "TECHNOLOGY": [
+    "https://www.theverge.com/",
+    "https://arstechnica.com/",
+    "https://techcrunch.com/"
+  ],
+  "PETS": [
+    "https://www.akc.org/",
+    "https://www.aspca.org/",
+    "https://www.petmd.com/"
+  ],
+  "HOME_IMPROVEMENT": [
+    "https://www.thisoldhouse.com/",
+    "https://www.familyhandyman.com/",
+    "https://www.bobvila.com/"
+  ],
+  "BEAUTY": [
+    "https://www.allure.com/",
+    "https://www.byrdie.com/",
+    "https://www.sephora.com/"
+  ],
+  "MUSIC": [
+    "https://pitchfork.com/",
+    "https://www.rollingstone.com/music/",
+    "https://www.billboard.com/"
+  ],
+  "FITNESS": [
+    "https://www.menshealth.com/",
+    "https://www.self.com/",
+    "https://www.acefitness.org/"
+  ],
+  "ENTERTAINMENT": [
+    "https://variety.com/",
+    "https://www.hollywoodreporter.com/",
+    "https://www.imdb.com/"
+  ],
+  "FOOD": [
+    "https://www.foodnetwork.com/",
+    "https://www.epicurious.com/",
+    "https://www.eater.com/"
+  ],
+  "POLITICS": [
+    "https://www.reuters.com/world/",
+    "https://apnews.com/hub/politics",
+    "https://www.bbc.com/news"
+  ],
+  "SCIENCE": [
+    "https://www.scientificamerican.com/",
+    "https://www.nature.com/",
+    "https://www.sciencenews.org/"
+  ],
+  "BUSINESS": [
+    "https://www.forbes.com/",
+    "https://hbr.org/",
+    "https://www.economist.com/"
+  ],
+  "OUTDOOR_RECREATION": [
+    "https://www.rei.com/",
+    "https://www.outsideonline.com/",
+    "https://www.alltrails.com/"
+  ],
+  "CRAFTS": [
+    "https://www.craftsy.com/",
+    "https://www.instructables.com/",
+    "https://www.michaels.com/"
+  ],
+  "HISTORY": [
+    "https://www.history.com/",
+    "https://www.smithsonianmag.com/history/",
+    "https://www.britannica.com/"
+  ],
+  "ENVIRONMENT": [
+    "https://www.nationalgeographic.com/environment",
+    "https://www.epa.gov/",
+    "https://e360.yale.edu/"
+  ],
+  "MILITARY_DEFENSE": [
+    "https://www.military.com/",
+    "https://www.defensenews.com/",
+    "https://www.janes.com/"
+  ],
+  "WELLNESS_ALTERNATIVE": [
+    "https://www.healthline.com/",
+    "https://www.mindbodygreen.com/",
+    "https://www.yogajournal.com/"
+  ],
+  "RELATIONSHIPS_DATING": [
+    "https://www.psychologytoday.com/us/basics/relationships",
+    "https://www.gottman.com/",
+    "https://www.brides.com/"
+  ]
+}

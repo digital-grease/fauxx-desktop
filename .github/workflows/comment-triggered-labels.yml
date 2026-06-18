@@ -1,0 +1,41 @@
+name: Comment-Triggered Labels
+
+# Adds labels to issues based on maintainer comments. Currently handles:
+#   - "awaiting-user-update": fires when the maintainer asks the reporter to try
+#     a newer version. Triggered by a /awaiting-update slash command OR by one of
+#     a small set of canonical phrases the maintainer naturally uses.
+#
+# Maintainer-only: only the repo owner's comments trigger. Anyone else's comments
+# are no-ops, so random commenters cannot spam labels.
+#
+# Add more rules below as more comment-triggered label patterns emerge.
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  awaiting-user-update:
+    name: Apply awaiting-user-update label
+    # Skip PR comments; only fire on issue comments from the repo owner;
+    # require one of the trigger phrases or the slash command to be present.
+    if: |
+      github.event.issue.pull_request == null &&
+      github.event.comment.user.login == github.event.repository.owner.login &&
+      (contains(github.event.comment.body, '/awaiting-update') ||
+       contains(github.event.comment.body, 'try the latest version') ||
+       contains(github.event.comment.body, 'should be fixed in v') ||
+       contains(github.event.comment.body, 'fixed in the latest release'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add awaiting-user-update label
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "awaiting-user-update"

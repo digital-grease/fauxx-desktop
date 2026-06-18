@@ -1,0 +1,420 @@
+# Release pipeline for fauxx-desktop (C0 #6: packaging + reproducible signed
+# releases). Driven by `dist` (axodotdev, formerly cargo-dist), pinned to
+# v0.32.0 to match `cargo-dist-version` in dist-workspace.toml.
+#
+# This workflow mirrors the layout `dist generate` produces for 0.32.0 (plan ->
+# per-OS build-local-artifacts matrix -> build-global-artifacts -> host ->
+# announce) but is hand-maintained here because `dist` is not installed on the
+# build box and `dist-workspace.toml` is allow-dirty = ["ci"]. Re-running
+# `dist generate` after a dist upgrade is the supported way to refresh it; see
+# docs/RELEASING.md.
+#
+# What it produces (per docs/RELEASING.md):
+#   - per-OS archives + installers (shell, powershell) for BOTH binaries
+#     (`fauxx` from apps/cli and `fauxx-desktop` from apps/desktop, gui feature)
+#   - a SHA256 checksum file per artifact
+#   - a GitHub build-provenance attestation per artifact (actions/attest@v4)
+#   - a GitHub Release carrying the AGPL-3.0-only license
+#
+# Triggers: a pushed `v*` tag, OR a manual workflow_dispatch.
+#
+# Signing is OPTIONAL and gated on repository secrets. Windows Authenticode
+# (SSL.com eSigner) and macOS Developer ID signing run only when their secrets
+# are present; absent secrets skip signing without failing the release. See the
+# TODO(secrets) notes in dist-workspace.toml and docs/RELEASING.md.
+
+name: Release
+
+permissions:
+  # Create the GitHub Release and upload artifacts.
+  contents: write
+  # Mint Sigstore-backed build-provenance attestations (OIDC).
+  id-token: write
+  attestations: write
+
+# `v*` tag push OR manual dispatch. The dispatch input lets a maintainer drive a
+# dry run (plan only) without cutting a real release.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build (e.g. v0.1.0). Leave blank for a plan-only dry run."
+        required: false
+        type: string
+
+# dist passes the resolved tag down the job graph through this env var.
+env:
+  ALL_CARGO_DIST_TARGET_TRIPLES: "x86_64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin x86_64-pc-windows-msvc"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # plan: resolve the release manifest. On a `v*` tag this prepares a real
+  # release; on workflow_dispatch without a tag it is a plan-only dry run.
+  # ---------------------------------------------------------------------------
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      val: ${{ steps.plan.outputs.manifest }}
+      tag: ${{ steps.tag.outputs.tag }}
+      publishing: ${{ steps.tag.outputs.publishing }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          # Full history so dist can read the changelog / previous tags.
+          fetch-depth: 0
+      - name: Install dist (pinned)
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/download/v0.32.0/cargo-dist-installer.sh | sh
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            tag="${GITHUB_REF#refs/tags/}"
+            echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+            echo "publishing=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ inputs.tag }}" ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+            echo "publishing=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=dry-run" >> "$GITHUB_OUTPUT"
+            echo "publishing=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Plan release
+        id: plan
+        run: |
+          if [ "${{ steps.tag.outputs.publishing }}" = "true" ]; then
+            dist host --steps=create --tag="${{ steps.tag.outputs.tag }}" --output-format=json > plan-dist-manifest.json
+          else
+            dist plan --output-format=json > plan-dist-manifest.json
+          fi
+          echo "dist plan ran successfully"
+          cat plan-dist-manifest.json
+          echo "manifest=$(jq -c "." plan-dist-manifest.json)" >> "$GITHUB_OUTPUT"
+      - name: Upload plan manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-plan-dist-manifest
+          path: plan-dist-manifest.json
+
+  # ---------------------------------------------------------------------------
+  # build-local-artifacts: per-OS matrix. Builds BOTH binaries for each target,
+  # produces the archive + checksum, attests each artifact, and runs the
+  # secret-gated signing steps.
+  # ---------------------------------------------------------------------------
+  build-local-artifacts:
+    name: build-local-artifacts (${{ join(matrix.targets, ', ') }})
+    needs:
+      - plan
+    if: ${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix.include != null && (needs.plan.outputs.publishing == 'true') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # x86_64 Linux. Installs the GUI + keystore build deps (libxkbcommon,
+          # wayland, dbus) declared in dist-workspace.toml's [dist.dependencies].
+          - runner: ubuntu-24.04
+            dist-args: "--artifacts=local --target=x86_64-unknown-linux-gnu"
+            install-dist: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/download/v0.32.0/cargo-dist-installer.sh | sh"
+            targets: ["x86_64-unknown-linux-gnu"]
+          # macOS Apple silicon.
+          - runner: macos-14
+            dist-args: "--artifacts=local --target=aarch64-apple-darwin"
+            install-dist: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/download/v0.32.0/cargo-dist-installer.sh | sh"
+            targets: ["aarch64-apple-darwin"]
+          # macOS Intel.
+          - runner: macos-14
+            dist-args: "--artifacts=local --target=x86_64-apple-darwin"
+            install-dist: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/download/v0.32.0/cargo-dist-installer.sh | sh"
+            targets: ["x86_64-apple-darwin"]
+          # x86_64 Windows. WiX v3 is preinstalled on the GitHub runner image
+          # (needed only if msi is enabled later).
+          - runner: windows-2022
+            dist-args: "--artifacts=local --target=x86_64-pc-windows-msvc"
+            install-dist: "irm  https://github.com/axodotdev/cargo-dist/releases/download/v0.32.0/cargo-dist-installer.ps1 | iex"
+            targets: ["x86_64-pc-windows-msvc"]
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      BUILD_MANIFEST_NAME: target/distrib/${{ join(matrix.targets, '-') }}-dist-manifest.json
+      # Reproducibility levers we own (see docs/RELEASING.md). SOURCE_DATE_EPOCH
+      # pins embedded timestamps; --remap-path-prefix scrubs the absolute build
+      # path so binaries do not encode the runner's checkout directory.
+      SOURCE_DATE_EPOCH: "1"
+      CARGO_INCREMENTAL: "0"
+      RUSTFLAGS: "--remap-path-prefix=${{ github.workspace }}=/build"
+      # Windows Authenticode via SSL.com eSigner. dist signs only when all four
+      # are non-empty; absent secrets skip signing (no hard failure).
+      SSLDOTCOM_USERNAME: ${{ secrets.SSLDOTCOM_USERNAME }}
+      SSLDOTCOM_PASSWORD: ${{ secrets.SSLDOTCOM_PASSWORD }}
+      SSLDOTCOM_CREDENTIAL_ID: ${{ secrets.SSLDOTCOM_CREDENTIAL_ID }}
+      SSLDOTCOM_TOTP_SECRET: ${{ secrets.SSLDOTCOM_TOTP_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      # Pin the release compiler to the same toolchain CI uses (1.96.0, see
+      # rust-toolchain.toml) so the produced binaries do not depend on whatever
+      # rustc the runner image happens to ship. This is a load-bearing
+      # reproducibility lever, alongside SOURCE_DATE_EPOCH and --remap-path-prefix.
+      - name: Install the pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.96.0"
+      - name: Install dist (pinned)
+        run: ${{ matrix.install-dist }}
+      # Fail closed if Cargo.lock is missing or stale: a current, committed lock
+      # is what makes the dependency graph reproducible. `cargo metadata --locked`
+      # verifies it WITHOUT modifying it, so the subsequent `dist build` resolves
+      # against exactly the locked versions (docs/RELEASING.md promises --locked).
+      - name: Verify Cargo.lock is current (locked deps)
+        run: cargo metadata --locked --format-version 1 > /dev/null
+        shell: bash
+      - name: Install dist-managed system dependencies
+        run: dist build ${{ matrix.dist-args }} --print=linkage > /dev/null 2>&1 || true
+        shell: bash
+      # macOS Developer ID signing + notarization. OPTIONAL and secret-gated:
+      # this entire step is skipped when APPLE_CERT_DATA is empty, so a release
+      # without the Apple secrets still succeeds (unsigned macOS archive). dist
+      # 0.32 has no first-class macOS signing config (upstream issue #1121), so
+      # we import the cert into a throwaway keychain here. TODO(secrets):
+      # provision the Apple Developer ID Application cert + App Store Connect
+      # API key and add the secrets.
+      - name: Set up macOS signing keychain (optional, secret-gated)
+        if: ${{ runner.os == 'macOS' && env.APPLE_CERT_DATA != '' }}
+        env:
+          APPLE_CERT_DATA: ${{ secrets.APPLE_CERT_DATA }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/fauxx-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          echo "$APPLE_CERT_DATA" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -P "$APPLE_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security list-keychain -d user -s "$KEYCHAIN" login.keychain-db
+          rm -f "$RUNNER_TEMP/cert.p12"
+      - name: Build artifacts
+        run: |
+          dist build ${{ matrix.dist-args }} --output-format=json > dist-manifest.json
+          echo "dist ran successfully"
+          cat dist-manifest.json
+          # Stage the produced artifacts for upload and attestation.
+          jq --raw-output ".artifacts[]?.path | select( . != null )" dist-manifest.json > uploads.txt
+          {
+            echo "uploads<<EOF"
+            cat uploads.txt
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+        id: build
+        shell: bash
+      # macOS Developer ID code-sign + notarize. Skipped when the signing
+      # identity secret is absent (a release without the Apple secrets still
+      # succeeds, shipping an unsigned macOS archive). TODO(secrets) as above.
+      #
+      # dist 0.32 has no macOS signing hook (upstream axodotdev/cargo-dist#1121),
+      # and it has already built + archived the UNSIGNED binaries by this point.
+      # So we open each macOS archive, codesign the Mach-O binaries inside it with
+      # the hardened runtime, notarize them (via a zip, the format notarytool
+      # accepts), then re-pack the archive and regenerate its shipped .sha256 so
+      # the published checksum matches the signed archive.
+      #
+      # !! UNVALIDATED: this path has never run end to end (no Apple account /
+      # macOS signing certs provisioned yet, and CI here has no macOS+Apple
+      # secrets). It MUST be confirmed on a workflow_dispatch dry-run once the
+      # Developer ID cert + App Store Connect API key exist. Known caveats: (1)
+      # the dist-manifest.json records the PRE-signing checksum (the shipped
+      # per-artifact .sha256 is regenerated here to match the signed archive);
+      # (2) a bare CLI Mach-O cannot be stapled, so Gatekeeper verifies the
+      # notarization ticket online rather than from a stapled ticket; (3) when you
+      # provision certs, also evaluate upgrading cargo-dist to a version with
+      # native macOS signing as the cleaner long-term path.
+      - name: Codesign and notarize (macOS, optional, secret-gated, UNVALIDATED)
+        if: ${{ runner.os == 'macOS' && env.APPLE_SIGNING_IDENTITY != '' }}
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # App Store Connect API key for notarytool: the .p8 base64-encoded, its
+          # Key ID, and the issuer UUID.
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          key_p8="$RUNNER_TEMP/asc-key.p8"
+          echo "$APPLE_API_KEY" | base64 --decode > "$key_p8"
+          while IFS= read -r archive; do
+            case "$archive" in *.tar.xz) ;; *) continue ;; esac
+            # Normalize to an absolute path so the re-pack (which runs from inside
+            # the extract dir) writes back to the original archive location.
+            archive="$(cd "$(dirname "$archive")" && pwd)/$(basename "$archive")"
+            echo "signing macOS archive: $archive"
+            work="$(mktemp -d)"
+            tar -xJf "$archive" -C "$work"
+            # Codesign every Mach-O executable in the extracted tree.
+            find "$work" -type f -perm -u+x | while IFS= read -r f; do
+              if file "$f" | grep -q "Mach-O"; then
+                codesign --force --options runtime --timestamp \
+                  --sign "$APPLE_SIGNING_IDENTITY" "$f"
+              fi
+            done
+            # Notarize via a zip of the signed payload (notarytool accepts
+            # zip/pkg/dmg, not tar.xz); --wait blocks until Apple accepts.
+            zip_path="$RUNNER_TEMP/$(basename "$archive").zip"
+            ( cd "$work" && zip -qr "$zip_path" . )
+            xcrun notarytool submit "$zip_path" \
+              --key "$key_p8" --key-id "$APPLE_API_KEY_ID" \
+              --issuer "$APPLE_API_ISSUER" --team-id "$APPLE_TEAM_ID" --wait
+            # Re-pack the signed binaries into the original archive path and
+            # regenerate the shipped checksum to match.
+            top="$(ls "$work")"
+            ( cd "$work" && tar -cJf "$archive" "$top" )
+            shasum -a 256 "$archive" | awk '{print $1}' > "$archive.sha256"
+          done < uploads.txt
+          rm -f "$key_p8"
+      # Mint a Sigstore build-provenance attestation per artifact (matches
+      # github-attestations = true in dist-workspace.toml). Verifiable later
+      # with `gh attestation verify <file> --repo digital-grease/fauxx-desktop`.
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ steps.build.outputs.uploads }}
+          predicate-type: "https://slsa.dev/provenance/v1"
+          predicate: '{}'
+      - name: Upload local artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-build-local-${{ join(matrix.targets, '_') }}
+          path: |
+            target/distrib/*.tar.xz
+            target/distrib/*.zip
+            target/distrib/*.sha256
+            target/distrib/*-dist-manifest.json
+
+  # ---------------------------------------------------------------------------
+  # build-global-artifacts: platform-agnostic artifacts (the shell + powershell
+  # installers, the unified dist-manifest, and the source tarball).
+  # ---------------------------------------------------------------------------
+  build-global-artifacts:
+    needs:
+      - plan
+      - build-local-artifacts
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SOURCE_DATE_EPOCH: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - name: Install dist (pinned)
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/download/v0.32.0/cargo-dist-installer.sh | sh
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Fetch local artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: artifacts-*
+          path: target/distrib/
+          merge-multiple: true
+      - name: Build global artifacts
+        id: build
+        run: |
+          dist build --artifacts=global --output-format=json > dist-manifest.json
+          echo "dist ran successfully"
+          jq --raw-output ".artifacts[]?.path | select( . != null )" dist-manifest.json > uploads.txt
+          {
+            echo "uploads<<EOF"
+            cat uploads.txt
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+        shell: bash
+      - name: Attest global artifacts provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ steps.build.outputs.uploads }}
+          predicate-type: "https://slsa.dev/provenance/v1"
+          predicate: '{}'
+      - name: Upload global artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-build-global
+          path: |
+            target/distrib/*-installer.sh
+            target/distrib/*-installer.ps1
+            target/distrib/*.tar.gz
+            target/distrib/dist-manifest.json
+
+  # ---------------------------------------------------------------------------
+  # host: assemble all artifacts and publish the GitHub Release (only when this
+  # run is a real, publishing release). Carries the AGPL-3.0-only license.
+  # ---------------------------------------------------------------------------
+  host:
+    needs:
+      - plan
+      - build-local-artifacts
+      - build-global-artifacts
+    if: ${{ always() && needs.plan.outputs.publishing == 'true' && needs.build-local-artifacts.result == 'success' && needs.build-global-artifacts.result == 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - name: Install dist (pinned)
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/download/v0.32.0/cargo-dist-installer.sh | sh
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Fetch all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: artifacts-*
+          path: target/distrib/
+          merge-multiple: true
+      - name: Upload and create GitHub Release
+        run: |
+          dist host --steps=upload --steps=release --tag="${{ needs.plan.outputs.tag }}"
+        shell: bash
+
+  # ---------------------------------------------------------------------------
+  # announce: final gate that fails if any upstream job failed. Mirrors dist's
+  # generated `announce` job and is the single status check to require.
+  # ---------------------------------------------------------------------------
+  announce:
+    needs:
+      - plan
+      - host
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Confirm release succeeded
+        run: |
+          if [ "${{ needs.plan.result }}" = "failure" ] || [ "${{ needs.host.result }}" = "failure" ]; then
+            echo "::error::release pipeline failed"
+            exit 1
+          fi
+          echo "release pipeline completed"

@@ -1,0 +1,95 @@
+name: Crash report
+description: Fauxx Desktop crashed or panicked (an unexpected exit, a Rust panic, or an aborted process)
+title: "Crash: "
+labels: ["bug", "crash", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a crash. Before you file:
+
+        - **Are you on the latest version?** If not, please update first, the crash may already be fixed. See the [releases page](https://github.com/digital-grease/fauxx-desktop/releases).
+        - **For a full backtrace**, re-run with `RUST_BACKTRACE=1` (or `RUST_BACKTRACE=full`) set and paste the output below.
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options:
+        - Linux
+        - macOS
+        - Windows
+    validations:
+      required: true
+
+  - type: input
+    id: os_version
+    attributes:
+      label: OS version
+      placeholder: "Ubuntu 24.04 / macOS 15 / Windows 11"
+    validations:
+      required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: Fauxx Desktop version
+      description: From `fauxx --version`, or the release tag you installed.
+      placeholder: 0.1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Best guess of what part crashed. The auto-labeler reads this to tag the issue.
+      options:
+        - core
+        - cli
+        - gui
+        - sync
+        - browser
+        - store
+        - network
+        - extension
+        - packaging
+        - other
+    validations:
+      required: false
+
+  - type: textarea
+    id: backtrace
+    attributes:
+      label: Panic message / backtrace
+      description: Paste the panic line and (ideally) the `RUST_BACKTRACE=1` output. Redact anything sensitive first.
+      placeholder: |
+        thread 'main' panicked at crates/fauxx-core/src/...:NN:CC:
+        ...
+        note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What were you doing when it crashed?
+      description: Optional. Anything that helps reproduce. The exact command or action is ideal.
+      placeholder: I ran `fauxx serve` and it exited after a few minutes.
+    validations:
+      required: false
+
+  - type: textarea
+    id: debug_log
+    attributes:
+      label: Debug log (scrubbed)
+      description: |
+        Strongly encouraged. The crash is captured in the persisted debug log. Export a redacted
+        copy and drag the file in here: run `fauxx logs export` (CLI), or click **Export logs** in
+        the desktop app. The export is scrubbed for sharing (user paths, IP/MAC addresses, emails,
+        keys, ids, URLs, and persona/device/peer names are redacted), so it is safe to attach to a
+        public issue.
+      placeholder: Drag the exported fauxx-debug-log.txt file here.
+    validations:
+      required: false

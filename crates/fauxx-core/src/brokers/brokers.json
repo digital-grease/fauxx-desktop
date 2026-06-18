@@ -1,0 +1,67 @@
+{
+  "spokeo": {
+    "display_name": "Spokeo",
+    "opt_out_url": "https://www.spokeo.com/optout",
+    "method": "web-form",
+    "required_fields": ["listing_url", "email"],
+    "notes": "Paste the URL of your Spokeo listing and a confirmation email; Spokeo emails a removal link to click.",
+    "deadline_days": 30
+  },
+  "whitepages": {
+    "display_name": "Whitepages",
+    "opt_out_url": "https://www.whitepages.com/suppression-requests",
+    "method": "web-form",
+    "required_fields": ["listing_url", "name", "phone"],
+    "notes": "Find your listing, submit the suppression request, then confirm via an automated phone call.",
+    "deadline_days": 30
+  },
+  "beenverified": {
+    "display_name": "BeenVerified",
+    "opt_out_url": "https://www.beenverified.com/app/optout/search",
+    "method": "web-form",
+    "required_fields": ["name", "location", "email"],
+    "notes": "Search for your record, select it, and confirm the opt-out via an email link.",
+    "deadline_days": 30
+  },
+  "intelius": {
+    "display_name": "Intelius",
+    "opt_out_url": "https://www.intelius.com/opt-out/submit/",
+    "method": "web-form",
+    "required_fields": ["name", "location", "email"],
+    "notes": "Submit name and location, then confirm via an emailed link. Operated by PeopleConnect.",
+    "deadline_days": 30
+  },
+  "radaris": {
+    "display_name": "Radaris",
+    "opt_out_url": "https://radaris.com/control/privacy",
+    "method": "web-form",
+    "required_fields": ["listing_url", "email"],
+    "notes": "Locate your profile, request control of it, then complete removal from the privacy page.",
+    "deadline_days": 30
+  },
+  "mylife": {
+    "display_name": "MyLife",
+    "opt_out_url": "https://www.mylife.com/ccpa/index.pubview",
+    "method": "email",
+    "required_fields": ["name", "location", "listing_url", "email"],
+    "email_to": "privacy@mylife.com",
+    "notes": "MyLife processes removals via a CCPA request; email the privacy address with your listing URL.",
+    "deadline_days": 45
+  },
+  "acxiom": {
+    "display_name": "Acxiom",
+    "opt_out_url": "https://isapps.acxiom.com/optout/optout.aspx",
+    "method": "web-form",
+    "required_fields": ["name", "location", "email"],
+    "notes": "Acxiom is a marketing-data broker; the opt-out form suppresses your record from its data products.",
+    "deadline_days": 45
+  },
+  "peoplefinders": {
+    "display_name": "PeopleFinders",
+    "opt_out_url": "https://www.peoplefinders.com/opt-out",
+    "method": "web-form",
+    "required_fields": ["listing_url", "email"],
+    "notes": "Search, select your record, and confirm the opt-out via the emailed link.",
+    "deadline_days": 30
+  }
+}
