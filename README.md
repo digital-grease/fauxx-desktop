@@ -22,7 +22,7 @@ It is decoy-only and local-first by design: it never touches your real accounts,
 The real work lives in a headless library so every surface shares one implementation and the same guarantees:
 
 - **`crates/fauxx-core`** is the headless core: personas, the encrypted store, sync, the decoy browser, measurement, orchestration. It holds no UI types.
-- **`apps/cli`** is the `fauxx` binary: a clap command surface over the core, plus a `serve` mode for headless homelab use and a `native-host` subcommand for the WebExtension.
+- **`apps/cli`** is the `fauxx-cli` binary: a clap command surface over the core, plus a `serve` mode for headless homelab use and a `native-host` subcommand for the WebExtension.
 - **`apps/desktop`** is an [Iced](https://iced.rs) GUI, behind the opt-in `gui` feature, so a default build links no windowing libraries.
 - **`extension/`** is the standalone WebExtension (not a Cargo member, plain JS).
 
@@ -54,15 +54,15 @@ On Linux the GUI needs a few system libraries at build time (`libxkbcommon`, Way
 The CLI is the primary surface. A few examples:
 
 ```sh
-fauxx status                 # show core/store status
-fauxx persona list           # list synthetic personas
-fauxx pair                   # pair with the phone (shows/scans a QR payload)
-fauxx run                    # run the agent in the foreground
-fauxx serve --config c.json  # headless homelab mode (optionally with MQTT)
-fauxx native-host            # the WebExtension bridge (launched by the browser)
+fauxx-cli status                 # show core/store status
+fauxx-cli persona list           # list synthetic personas
+fauxx-cli pair                   # pair with the phone (shows/scans a QR payload)
+fauxx-cli run                    # run the agent in the foreground
+fauxx-cli serve --config c.json  # headless homelab mode (optionally with MQTT)
+fauxx-cli native-host            # the WebExtension bridge (launched by the browser)
 ```
 
-Run `fauxx --help` (and `fauxx <command> --help`) for the full surface, which also covers egress/DNS, broker DSAR, aliases, anchors, exports, generate/mint, and campaigns.
+Run `fauxx-cli --help` (and `fauxx-cli <command> --help`) for the full surface, which also covers egress/DNS, broker DSAR, aliases, anchors, exports, generate/mint, and campaigns.
 
 To run the GUI, build with the `gui` feature and run `fauxx-desktop` (a graphical session is required). The system tray uses the StatusNotifierItem spec on Linux and the native tray on Windows and macOS.
 
@@ -89,7 +89,7 @@ The GUI is behind the `gui` feature and needs a graphical session. Build with `c
 Yes. The decoy browser answers the proxy authentication challenge over CDP using credentials held in the keystore (never the database or logs). If an authenticated proxy is configured but no credentials are stored, the launch fails closed.
 
 **The WebExtension says the native host is unavailable.**
-The extension needs its native-messaging host (the `fauxx native-host` subcommand) installed and registered. See [`extension/native-host/README.md`](./extension/native-host/README.md). Until then the extension runs standalone with its bundled site table.
+The extension needs its native-messaging host (the `fauxx-cli native-host` subcommand) installed and registered. See [`extension/native-host/README.md`](./extension/native-host/README.md). Until then the extension runs standalone with its bundled site table.
 
 ## Contributing
 

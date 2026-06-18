@@ -122,7 +122,7 @@ fn loaded(snapshot: &PrivacySnapshot, tab: PrivacyTab) -> Element<'_, Message> {
 /// DSAR requests + statutory deadline state (#16).
 fn dsar_section(rows: &[DsarRow]) -> Element<'_, Message> {
     if rows.is_empty() {
-        return empty("No data-subject requests yet. Generate one with `fauxx dsar`.");
+        return empty("No data-subject requests yet. Generate one with `fauxx-cli dsar`.");
     }
     let mut col = column![section_title(
         "Data-subject requests and statutory deadlines"
@@ -153,7 +153,7 @@ fn dsar_section(rows: &[DsarRow]) -> Element<'_, Message> {
 /// Email-alias inventory (#17).
 fn alias_section(rows: &[AliasRow]) -> Element<'_, Message> {
     if rows.is_empty() {
-        return empty("No email aliases yet. Mint one with `fauxx alias`.");
+        return empty("No email aliases yet. Mint one with `fauxx-cli alias`.");
     }
     let mut col = column![section_title("Email aliases")].spacing(6);
     for a in rows {
@@ -178,7 +178,7 @@ fn alias_section(rows: &[AliasRow]) -> Element<'_, Message> {
 /// Per-site GPC honoring (#18).
 fn gpc_section(rows: &[GpcRow]) -> Element<'_, Message> {
     if rows.is_empty() {
-        return empty("No GPC observations yet. Check a site with `fauxx gpc`.");
+        return empty("No GPC observations yet. Check a site with `fauxx-cli gpc`.");
     }
     let mut col = column![section_title("Per-site Global Privacy Control honoring")].spacing(6);
     for g in rows {
@@ -209,7 +209,7 @@ fn anchor_section<'a>(
     recs: &'a [AnchorRecommendationRow],
 ) -> Element<'a, Message> {
     if rows.is_empty() && recs.is_empty() {
-        return empty("No account anchors yet. Record one with `fauxx anchor`.");
+        return empty("No account anchors yet. Record one with `fauxx-cli anchor`.");
     }
     let mut col = column![section_title("Account anchors (real identity touchpoints)")].spacing(6);
     for a in rows {

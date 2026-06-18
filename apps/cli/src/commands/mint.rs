@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx mint`: mint N coherent PUMS personas into a signed pack (C6 #29).
+//! `fauxx-cli mint`: mint N coherent PUMS personas into a signed pack (C6 #29).
 //!
 //! Thin shim over `core.mint_persona_pack` / `core.mint_and_push_pack`. The
 //! PUMS draw, coherence re-sampling, and signing all run in the core; the CLI

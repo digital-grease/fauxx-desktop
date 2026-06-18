@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! End-to-end CLI tests: drive the compiled `fauxx` binary against a temp store
+//! End-to-end CLI tests: drive the compiled `fauxx-cli` binary against a temp store
 //! that uses the headless encrypted-key-file key source (NEVER the OS keystore,
 //! to keep the tests hermetic). Exercises add -> list -> show -> delete plus
 //! status and error/exit-code behavior.
@@ -46,9 +46,9 @@ impl Fixture {
         })
     }
 
-    /// Run `fauxx <args...>` with this fixture's store flags prepended.
+    /// Run `fauxx-cli <args...>` with this fixture's store flags prepended.
     fn run(&self, args: &[&str]) -> Result<Output> {
-        let bin = env!("CARGO_BIN_EXE_fauxx");
+        let bin = env!("CARGO_BIN_EXE_fauxx-cli");
         Command::new(bin)
             .arg("--db")
             .arg(&self.db)
@@ -56,7 +56,7 @@ impl Fixture {
             .arg(&self.passphrase_file)
             .args(args)
             .output()
-            .context("spawning fauxx binary")
+            .context("spawning fauxx-cli binary")
     }
 }
 
@@ -190,7 +190,7 @@ fn add_from_json_stdin() -> Result<()> {
         }}"#
     );
 
-    let bin = env!("CARGO_BIN_EXE_fauxx");
+    let bin = env!("CARGO_BIN_EXE_fauxx-cli");
     let mut child = Command::new(bin)
         .arg("--db")
         .arg(&fx.db)
@@ -201,7 +201,7 @@ fn add_from_json_stdin() -> Result<()> {
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .context("spawning fauxx for stdin add")?;
+        .context("spawning fauxx-cli for stdin add")?;
     {
         use std::io::Write as _;
         let stdin = child.stdin.as_mut().context("child stdin not piped")?;
@@ -259,7 +259,7 @@ fn missing_required_flags_is_usage_error() -> Result<()> {
 
 #[test]
 fn help_succeeds() -> Result<()> {
-    let bin = env!("CARGO_BIN_EXE_fauxx");
+    let bin = env!("CARGO_BIN_EXE_fauxx-cli");
     let out = Command::new(bin).arg("--help").output()?;
     assert_eq!(code(&out)?, 0);
     let help = stdout(&out)?;

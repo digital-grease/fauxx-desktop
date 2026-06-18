@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx persona ...`: list, show, add, and delete personas.
+//! `fauxx-cli persona ...`: list, show, add, and delete personas.
 //!
 //! These are thin shims over the core persona API. `add` is the minimal write
 //! path that makes list/show demonstrable end to end; full persona management

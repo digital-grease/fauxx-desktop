@@ -94,7 +94,7 @@ jobs:
           if echo "$BODY" | grep -qiE 'keystore|sqlcipher|passphrase|migration|encrypted store'; then
             labels_to_add+=("area:store")
           fi
-          if echo "$BODY" | grep -qiE 'fauxx serve|homelab|\bMQTT\b|home assistant|systemd|docker'; then
+          if echo "$BODY" | grep -qiE 'fauxx-cli serve|homelab|\bMQTT\b|home assistant|systemd|docker'; then
             labels_to_add+=("area:cli")
           fi
 

@@ -29,10 +29,10 @@ use anyhow::{bail, Context};
 use clap::{Args, Parser, Subcommand};
 use fauxx_core::{Config, KeySource};
 
-/// Top-level CLI definition for the `fauxx` binary.
+/// Top-level CLI definition for the `fauxx-cli` binary.
 #[derive(Parser, Debug)]
 #[command(
-    name = "fauxx",
+    name = "fauxx-cli",
     about = "Fauxx desktop companion (headless CLI), a thin client over fauxx-core",
     version,
     arg_required_else_help = true
@@ -175,7 +175,7 @@ fn prompt_passphrase() -> anyhow::Result<String> {
     Ok(passphrase)
 }
 
-/// The `fauxx` subcommands. The C0 #4 foundation (`run`, `status`, `persona`)
+/// The `fauxx-cli` subcommands. The C0 #4 foundation (`run`, `status`, `persona`)
 /// plus the C1 cross-device surface (`pair`, `peers`, `unpair`, `mode`,
 /// `schedule`), which makes the sync/coordination API reachable headlessly.
 /// Richer agent control lands in later milestones (C8 #35 serve mode).
@@ -234,7 +234,7 @@ pub enum Command {
 
     /// Remove a paired peer by its base64url public key.
     Unpair {
-        /// The peer's base64url public key (as shown by `fauxx peers --json`).
+        /// The peer's base64url public key (as shown by `fauxx-cli peers --json`).
         public_key: String,
     },
 
@@ -345,7 +345,7 @@ pub enum Command {
     },
 }
 
-/// The `fauxx logs ...` subcommands (the bug-report path).
+/// The `fauxx-cli logs ...` subcommands (the bug-report path).
 #[derive(Subcommand, Debug)]
 pub enum LogsCommand {
     /// Print the directory where the debug logs are written.
@@ -361,7 +361,7 @@ pub enum LogsCommand {
     Clear,
 }
 
-/// The `fauxx broker ...` subcommands (C3 #15).
+/// The `fauxx-cli broker ...` subcommands (C3 #15).
 #[derive(Subcommand, Debug)]
 pub enum BrokerCommand {
     /// List the bundled data-broker opt-out registry.
@@ -372,7 +372,7 @@ pub enum BrokerCommand {
     },
     /// Generate (without recording) a filled opt-out request to review.
     Generate {
-        /// The broker id (as shown by `fauxx broker list`).
+        /// The broker id (as shown by `fauxx-cli broker list`).
         broker_id: String,
         /// The persona id this request is for.
         persona_id: String,
@@ -404,7 +404,7 @@ pub enum BrokerCommand {
     },
 }
 
-/// The `fauxx dsar ...` subcommands (C3 #16).
+/// The `fauxx-cli dsar ...` subcommands (C3 #16).
 #[derive(Subcommand, Debug)]
 pub enum DsarCommand {
     /// Generate (without recording) a DSAR letter to review.
@@ -422,7 +422,7 @@ pub enum DsarCommand {
     },
     /// Export (render) a recorded request's letter text for manual sending.
     Export {
-        /// The request id (as shown by `fauxx dsar list`).
+        /// The request id (as shown by `fauxx-cli dsar list`).
         request_id: String,
         /// The real legal name the letter is signed with (never persisted).
         #[arg(long)]
@@ -440,7 +440,7 @@ pub enum DsarCommand {
     /// Mark a recorded request as SENT now, which starts its statutory deadline
     /// clock (C3 #16: until a request is sent, no deadline is tracked).
     Sent {
-        /// The request id (as shown by `fauxx dsar list`).
+        /// The request id (as shown by `fauxx-cli dsar list`).
         request_id: String,
     },
 }
@@ -488,7 +488,7 @@ impl From<DsarKindArg> for fauxx_core::RequestKind {
     }
 }
 
-/// The `fauxx alias ...` subcommands (C3 #17).
+/// The `fauxx-cli alias ...` subcommands (C3 #17).
 #[derive(Subcommand, Debug)]
 pub enum AliasCommand {
     /// Mint a fresh plus-address alias for a persona/site.
@@ -527,7 +527,7 @@ pub enum AliasCommand {
     },
     /// Revoke an alias by id (kept for the audit trail).
     Revoke {
-        /// The alias id (as shown by `fauxx alias list`).
+        /// The alias id (as shown by `fauxx-cli alias list`).
         alias_id: String,
     },
     /// Rotate an alias: revoke the old one and mint a fresh plus-address.
@@ -540,7 +540,7 @@ pub enum AliasCommand {
     },
 }
 
-/// The `fauxx gpc ...` subcommands (C3 #18): inspect the per-site Global Privacy
+/// The `fauxx-cli gpc ...` subcommands (C3 #18): inspect the per-site Global Privacy
 /// Control honoring observations the decoy/extension recorded.
 #[derive(Subcommand, Debug)]
 pub enum GpcCommand {
@@ -553,7 +553,7 @@ pub enum GpcCommand {
     },
 }
 
-/// The `fauxx anchor ...` subcommands (C3 #19).
+/// The `fauxx-cli anchor ...` subcommands (C3 #19).
 #[derive(Subcommand, Debug)]
 pub enum AnchorCommand {
     /// Record (or update) a curated account anchor in the inventory.
@@ -616,7 +616,7 @@ impl From<SignalArg> for fauxx_core::IdentitySignal {
     }
 }
 
-/// Arguments for `fauxx export` (C4 #23).
+/// Arguments for `fauxx-cli export` (C4 #23).
 #[derive(Args, Debug)]
 pub struct ExportArgs {
     /// The persona id to export the efficacy snapshot for.
@@ -650,7 +650,7 @@ impl From<ExportFormatArg> for fauxx_core::ExportFormat {
     }
 }
 
-/// The `fauxx ab ...` subcommands (C4 #21).
+/// The `fauxx-cli ab ...` subcommands (C4 #21).
 #[derive(Subcommand, Debug)]
 pub enum AbCommand {
     /// Define (insert or replace) a shadow profile.
@@ -724,7 +724,7 @@ impl From<PlatformArg> for fauxx_core::Platform {
     }
 }
 
-/// Arguments for `fauxx drift` (C4 #20).
+/// Arguments for `fauxx-cli drift` (C4 #20).
 #[derive(Args, Debug)]
 pub struct DriftArgs {
     /// The persona id to compute drift for.
@@ -734,7 +734,7 @@ pub struct DriftArgs {
     pub json: bool,
 }
 
-/// The `fauxx pack ...` subcommands (C5 #27).
+/// The `fauxx-cli pack ...` subcommands (C5 #27).
 #[derive(Subcommand, Debug)]
 pub enum PackCommand {
     /// Export selected personas to a signed pack file.
@@ -763,7 +763,7 @@ pub enum PackCommand {
     },
 }
 
-/// Arguments for `fauxx generate` (C6 #28).
+/// Arguments for `fauxx-cli generate` (C6 #28).
 #[derive(Args, Debug)]
 pub struct GenerateArgs {
     /// The persona id to run the generation pass for.
@@ -803,7 +803,7 @@ impl From<IntensityArg> for fauxx_core::IntensityLevel {
     }
 }
 
-/// Arguments for `fauxx mint` (C6 #29).
+/// Arguments for `fauxx-cli mint` (C6 #29).
 #[derive(Args, Debug)]
 pub struct MintArgs {
     /// How many coherent personas to mint.
@@ -819,7 +819,7 @@ pub struct MintArgs {
     pub push: bool,
 }
 
-/// The `fauxx egress ...` subcommands (C7 #30).
+/// The `fauxx-cli egress ...` subcommands (C7 #30).
 #[derive(Subcommand, Debug)]
 pub enum EgressCommand {
     /// Bind a per-persona egress.
@@ -867,7 +867,7 @@ pub enum EgressKindArg {
     Tor,
 }
 
-/// The `fauxx dns ...` subcommands (C7 #31).
+/// The `fauxx-cli dns ...` subcommands (C7 #31).
 #[derive(Subcommand, Debug)]
 pub enum DnsCommand {
     /// Bind a per-persona DNS strategy.
@@ -910,7 +910,7 @@ pub enum DnsModeArg {
     Dot,
 }
 
-/// The `fauxx campaign ...` subcommands (C8 #33).
+/// The `fauxx-cli campaign ...` subcommands (C8 #33).
 #[derive(Subcommand, Debug)]
 pub enum CampaignCommand {
     /// Create a goal-driven campaign.
@@ -985,7 +985,7 @@ impl From<ComparatorArg> for fauxx_core::Comparator {
     }
 }
 
-/// Arguments for `fauxx serve` (C8 #35, the homelab mode).
+/// Arguments for `fauxx-cli serve` (C8 #35, the homelab mode).
 #[derive(Args, Debug)]
 pub struct ServeArgs {
     /// Override the serve config-file path (default: the per-OS config dir, see
@@ -1016,7 +1016,7 @@ pub struct ServeArgs {
     pub max_ticks: Option<u64>,
 }
 
-/// The `fauxx pair ...` subcommands.
+/// The `fauxx-cli pair ...` subcommands.
 #[derive(Subcommand, Debug)]
 pub enum PairCommand {
     /// Print this device's pairing QR (unicode), fingerprint, and raw payload.
@@ -1029,11 +1029,11 @@ pub enum PairCommand {
     },
 }
 
-/// The `fauxx mode ...` subcommand. Absent (bare `fauxx mode`) also shows the
+/// The `fauxx-cli mode ...` subcommand. Absent (bare `fauxx-cli mode`) also shows the
 /// current mode.
 #[derive(Subcommand, Debug)]
 pub enum ModeCommand {
-    /// Show the current coordination mode (same as bare `fauxx mode`).
+    /// Show the current coordination mode (same as bare `fauxx-cli mode`).
     Show,
     /// Set the coordination mode.
     Set {
@@ -1061,7 +1061,7 @@ impl From<ModeArg> for fauxx_core::CoordinationMode {
     }
 }
 
-/// The `fauxx persona ...` subcommands.
+/// The `fauxx-cli persona ...` subcommands.
 #[derive(Subcommand, Debug)]
 pub enum PersonaCommand {
     /// List stored personas.
@@ -1088,7 +1088,7 @@ pub enum PersonaCommand {
     },
 }
 
-/// Arguments for `fauxx persona add`.
+/// Arguments for `fauxx-cli persona add`.
 ///
 /// Either supply a complete persona via `--from-json <FILE>` (or `-` for
 /// stdin), or build one from the individual `--name`/`--age-range`/etc. flags.

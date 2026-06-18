@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx status`: open the resolved store and print core health.
+//! `fauxx-cli status`: open the resolved store and print core health.
 
 use fauxx_core::Config;
 

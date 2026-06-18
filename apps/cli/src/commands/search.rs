@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx search <persona-id>`: a one-off decoy SEARCH session (C6 H1).
+//! `fauxx-cli search <persona-id>`: a one-off decoy SEARCH session (C6 H1).
 //!
 //! A thin shim over [`Core::run_persona_search_session_live`]: it generates
 //! persona-aligned, safety-gated queries and dispatches them to search engines

@@ -34,7 +34,7 @@ body:
     id: app_version
     attributes:
       label: Fauxx Desktop version
-      description: From `fauxx --version`, or the release tag you installed.
+      description: From `fauxx-cli --version`, or the release tag you installed.
       placeholder: 0.1.0
     validations:
       required: true
@@ -76,7 +76,7 @@ body:
     attributes:
       label: What were you doing when it crashed?
       description: Optional. Anything that helps reproduce. The exact command or action is ideal.
-      placeholder: I ran `fauxx serve` and it exited after a few minutes.
+      placeholder: I ran `fauxx-cli serve` and it exited after a few minutes.
     validations:
       required: false
 
@@ -86,7 +86,7 @@ body:
       label: Debug log (scrubbed)
       description: |
         Strongly encouraged. The crash is captured in the persisted debug log. Export a redacted
-        copy and drag the file in here: run `fauxx logs export` (CLI), or click **Export logs** in
+        copy and drag the file in here: run `fauxx-cli logs export` (CLI), or click **Export logs** in
         the desktop app. The export is scrubbed for sharing (user paths, IP/MAC addresses, emails,
         keys, ids, URLs, and persona/device/peer names are redacted), so it is safe to attach to a
         public issue.

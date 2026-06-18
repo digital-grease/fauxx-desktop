@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx drift`: print the per-platform KL-divergence drift for a persona
+//! `fauxx-cli drift`: print the per-platform KL-divergence drift for a persona
 //! (C4 #20). Thin shim over `core.all_platform_drift`; all KL math lives in the
 //! core. The CLI renders the latest scalar per platform (or the full bundle as
 //! JSON).

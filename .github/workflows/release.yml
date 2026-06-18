@@ -11,7 +11,7 @@
 #
 # What it produces (per docs/RELEASING.md):
 #   - per-OS archives + installers (shell, powershell) for BOTH binaries
-#     (`fauxx` from apps/cli and `fauxx-desktop` from apps/desktop, gui feature)
+#     (`fauxx-cli` from apps/cli and `fauxx-desktop` from apps/desktop, gui feature)
 #   - a SHA256 checksum file per artifact
 #   - a GitHub build-provenance attestation per artifact (actions/attest@v4)
 #   - a GitHub Release carrying the AGPL-3.0-only license

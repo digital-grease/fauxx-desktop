@@ -11,7 +11,7 @@
 # is enabled on boot. Install and enable per docs/DEPLOYMENT.md.
 #
 # Expectations:
-#   - the `fauxx` binary is installed at /usr/local/bin/fauxx,
+#   - the `fauxx-cli` binary is installed at /usr/local/bin/fauxx-cli,
 #   - a dedicated unprivileged user/group `fauxx` exists,
 #   - its state lives under /var/lib/fauxx (the store, key file, passphrase
 #     file), owned by that user and mode 0700,
@@ -30,7 +30,7 @@ Group=fauxx
 
 # The serve config points at the store, the key file, and the passphrase file
 # (the headless Argon2id passphrase-file key source). No interactive prompt.
-ExecStart=/usr/local/bin/fauxx serve --config /etc/fauxx/serve.json
+ExecStart=/usr/local/bin/fauxx-cli serve --config /etc/fauxx/serve.json
 Environment=RUST_LOG=info
 
 # Restart on failure (a crash or a fail-closed store-open error), with a small

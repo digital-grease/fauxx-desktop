@@ -14,7 +14,7 @@ process that owns a `fauxx_core::Core` handle and translates between the wire
 messages defined here and the Core async API.
 
 The Rust-side native-messaging **host is implemented** as the `native-host`
-subcommand of the `fauxx` CLI (`apps/cli`); see
+subcommand of the `fauxx-cli` CLI (`apps/cli`); see
 [`native-host/README.md`](./native-host/README.md) for installation. This
 document and `src/protocol.js` define the exact wire schema the host implements.
 

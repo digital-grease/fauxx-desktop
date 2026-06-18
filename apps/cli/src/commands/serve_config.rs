@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! The `fauxx serve` configuration file schema and its per-OS search path
+//! The `fauxx-cli serve` configuration file schema and its per-OS search path
 //! (C8 #35, the homelab mode).
 //!
 //! The serve config is JSON (serde_json, no new dependency). It is OPTIONAL: a
@@ -50,7 +50,7 @@ const CONFIG_FILE: &str = "serve.json";
 /// The default seconds between campaign-tick loop iterations.
 const DEFAULT_TICK_INTERVAL_SECS: u64 = 60;
 
-/// The persisted `fauxx serve` configuration (C8 #35).
+/// The persisted `fauxx-cli serve` configuration (C8 #35).
 ///
 /// Every field has a default so a minimal (or absent) file still runs. Field
 /// names are camelCase on the wire to match the rest of the project's JSON.

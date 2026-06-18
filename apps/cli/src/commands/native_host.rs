@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx native-host`: the R4 native-messaging HOST that bridges the C2 #14
+//! `fauxx-cli native-host`: the R4 native-messaging HOST that bridges the C2 #14
 //! WebExtension to the headless [`fauxx_core::Core`] (C2 #11-#13).
 //!
 //! The browser launches this process and exchanges JSON objects with it over

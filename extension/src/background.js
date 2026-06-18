@@ -91,7 +91,7 @@ function sendToHost(type, fields) {
 }
 
 // Connect to the local native-messaging host (the Core bridge). The host is the
-// `fauxx native-host` subcommand; until its native-messaging MANIFEST is
+// `fauxx-cli native-host` subcommand; until its native-messaging MANIFEST is
 // installed (see native-host/README.md), connectNative throws and we record a
 // friendly local error. Strictly opt-in: only called when enabled.
 function connectNative() {

@@ -19,7 +19,7 @@
 
 [workspace]
 # The Rust workspace that owns the binaries. `dist` discovers the two shippable
-# binaries from the Cargo metadata: `fauxx` (apps/cli, package fauxx-cli) and
+# binaries from the Cargo metadata: `fauxx-cli` (apps/cli, package fauxx-cli) and
 # `fauxx-desktop` (apps/desktop, package fauxx-desktop, built with the `gui`
 # feature, see [dist.packages] below).
 members = ["cargo:."]
@@ -144,7 +144,7 @@ ssldotcom-windows-sign = "prod"
 # keystore backend (dbus-secret-service, built with its vendored feature) pulls
 # libdbus headers. The SQLCipher store and its crypto are statically vendored
 # (rusqlite bundled-sqlcipher-vendored-openssl), so no system sqlite/openssl is
-# required. The CLI binary (`fauxx`) does not need the GUI libs, but installing
+# required. The CLI binary (`fauxx-cli`) does not need the GUI libs, but installing
 # them on the shared Linux build host is harmless and keeps one runner image.
 [dist.dependencies.apt]
 libxkbcommon-dev = '*'
@@ -160,7 +160,7 @@ pkg-config = '*'
 # Per-package overrides: which binaries ship, and with which features.
 # ---------------------------------------------------------------------------
 
-# The CLI binary `fauxx` ships as-is (default/headless build, no GUI libs).
+# The CLI binary `fauxx-cli` ships as-is (default/headless build, no GUI libs).
 [dist.packages.fauxx-cli]
 dist = true
 

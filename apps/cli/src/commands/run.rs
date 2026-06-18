@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx run`: the headless agent entrypoint skeleton.
+//! `fauxx-cli run`: the headless agent entrypoint skeleton.
 //!
 //! Opens the core, logs that the agent is running, then holds the core open
 //! until Ctrl-C (SIGINT). There is no scheduler yet (it is a fauxx-core stub),

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx gpc ...`: per-site Global Privacy Control honoring observations
+//! `fauxx-cli gpc ...`: per-site Global Privacy Control honoring observations
 //! (C3 #18).
 //!
 //! A thin shim over the core's GPC read-back store: the decoy browser / R4

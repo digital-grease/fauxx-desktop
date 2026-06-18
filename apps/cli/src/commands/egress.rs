@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx egress ...`: per-persona network egress (C7 #30).
+//! `fauxx-cli egress ...`: per-persona network egress (C7 #30).
 //!
 //! Thin shims over the core egress API. The egress routing config persists in
 //! the encrypted store; the exit indicator (and its fail-closed pause state) is

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx`: the CLI / headless entrypoint, a thin client over `fauxx-core`.
+//! `fauxx-cli`: the CLI / headless entrypoint, a thin client over `fauxx-core`.
 //!
 //! Because the core does all real work, the headless mode falls out of the
 //! architecture for free. This is the C0 #4 foundation: a clap-derive CLI with
@@ -47,7 +47,7 @@ const EXIT_USAGE: u8 = 2;
 
 fn main() -> ExitCode {
     // Stderr logging (RUST_LOG, default info) PLUS a persisted, rotating debug
-    // log file and a crash-capturing panic hook; `fauxx logs export` ships it,
+    // log file and a crash-capturing panic hook; `fauxx-cli logs export` ships it,
     // scrubbed, to a bug report. See fauxx_core::logging.
     fauxx_core::logging::init();
 
@@ -78,7 +78,7 @@ pub(crate) enum Failure {
 
 /// `#[tokio::main]` turns this into a synchronous call that drives the runtime,
 /// so `main` stays a plain `fn` returning an exit code. A multi-thread runtime
-/// is used so `fauxx run` can host background work in later milestones.
+/// is used so `fauxx-cli run` can host background work in later milestones.
 #[tokio::main]
 async fn run(cli: Cli) -> std::result::Result<(), Failure> {
     // `serve` resolves its OWN store config from its config file (the headless

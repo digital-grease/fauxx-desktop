@@ -1,6 +1,6 @@
 {
   "name": "com.digital_grease.fauxx",
-  "description": "Fauxx Core native-messaging host: serves decoy plans and persists in-browser decoy activity / Topics read-backs into the local encrypted measurement store. Implemented by the `fauxx native-host` subcommand (apps/cli).",
+  "description": "Fauxx Core native-messaging host: serves decoy plans and persists in-browser decoy activity / Topics read-backs into the local encrypted measurement store. Implemented by the `fauxx-cli native-host` subcommand (apps/cli).",
   "path": "/REPLACE/WITH/ABSOLUTE/PATH/TO/fauxx-native-host.sh",
   "type": "stdio",
   "allowed_origins": [

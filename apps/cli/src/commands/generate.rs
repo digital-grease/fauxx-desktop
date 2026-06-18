@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx generate`: run a generation pass producing signed artifacts (C6 #28).
+//! `fauxx-cli generate`: run a generation pass producing signed artifacts (C6 #28).
 //!
 //! Thin shim over `core.generate_signed_artifacts` / `core.run_generation_pass`.
 //! The heavy work (the adversarial-allocation weight map and the weight-map-

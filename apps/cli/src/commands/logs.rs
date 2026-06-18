@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx logs ...`: the bug-report path. Show where the persisted debug logs
+//! `fauxx-cli logs ...`: the bug-report path. Show where the persisted debug logs
 //! live, export a SCRUBBED copy to attach to a GitHub issue, or clear them.
 //!
 //! The scrubbing happens at export time (the on-disk log keeps full fidelity for

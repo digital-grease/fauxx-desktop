@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx alias ...`: per-persona email alias management (C3 #17).
+//! `fauxx-cli alias ...`: per-persona email alias management (C3 #17).
 //!
 //! Thin shims over the core alias API. The only built-in provider is the local,
 //! network-free plus-address provider; the no-reuse-across-sites rule and all

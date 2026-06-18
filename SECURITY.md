@@ -22,8 +22,8 @@ Use one of these private channels:
 
 Helpful things to include:
 
-- The affected version (from `fauxx --version` or the release tag) and the OS (Linux, macOS, or Windows).
-- Whether it involves the headless `fauxx` CLI, the desktop GUI, the `serve` homelab mode, or the companion browser extension.
+- The affected version (from `fauxx-cli --version` or the release tag) and the OS (Linux, macOS, or Windows).
+- Whether it involves the headless `fauxx-cli` CLI, the desktop GUI, the `serve` homelab mode, or the companion browser extension.
 - The component or screen involved, and a file or line reference if you have one.
 - What an attacker or another local process could observe or do, and what access or user action it requires.
 - Steps to reproduce, or a short proof of concept.
@@ -38,7 +38,7 @@ Helpful things to include:
 
 This project cares about more than classic exploitability. Findings that weaken the privacy guarantees the tool exists to provide are in scope. Examples:
 
-- Personal or identifying data that survives into a shared artifact, such as a `fauxx logs export` bug-report file, a persona pack, or an efficacy snapshot, that should have been redacted.
+- Personal or identifying data that survives into a shared artifact, such as a `fauxx-cli logs export` bug-report file, a persona pack, or an efficacy snapshot, that should have been redacted.
 - Data that survives a user-initiated wipe, or a secret (a key, a passphrase, a proxy credential) that reaches the SQLite plaintext, a log, or any output rather than staying in the OS keystore.
 - A way to make decoy traffic read as real activity under the user's identity, or to link a persona's decoy traffic back to the real user (for example a per-persona egress that silently falls back to the direct route).
 - Cross-device sync accepting a frame from an unpaired peer, or any sealed-channel weakness that exposes plaintext persona state on the wire.

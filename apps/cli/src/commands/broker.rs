@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx broker ...`: the data-broker opt-out registry and submission tracking
+//! `fauxx-cli broker ...`: the data-broker opt-out registry and submission tracking
 //! (C3 #15). Thin shims over the core broker API; all generation, deadline math,
 //! and persistence live in the core.
 

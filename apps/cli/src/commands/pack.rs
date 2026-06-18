@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx pack ...`: signed persona-pack import/export and the installed-pack
+//! `fauxx-cli pack ...`: signed persona-pack import/export and the installed-pack
 //! library (C5 #27). Thin shims over the core pack API; signing, verification,
 //! and the verify-before-write import all live in the core.
 

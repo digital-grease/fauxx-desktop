@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx serve`: the long-running headless homelab mode (C8 #35, U4).
+//! `fauxx-cli serve`: the long-running headless homelab mode (C8 #35, U4).
 //!
 //! Driven by a JSON config file (see [`super::serve_config`] for the schema and
 //! the per-OS search path). On start it:

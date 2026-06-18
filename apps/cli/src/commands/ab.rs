@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx ab ...`: control-profile A/B shadow profiles and cohort comparison
+//! `fauxx-cli ab ...`: control-profile A/B shadow profiles and cohort comparison
 //! (C4 #21). Thin shims over the core measurement API; all statistics live in
 //! the core (effect size, t-test, plain-words summary).
 

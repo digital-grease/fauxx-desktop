@@ -9,7 +9,7 @@
 
 This directory holds the registration artifacts for the **native-messaging
 host** that bridges the Fauxx Decoy Companion WebExtension to the headless Fauxx
-Core. The host itself is the `native-host` subcommand of the `fauxx` CLI binary
+Core. The host itself is the `native-host` subcommand of the `fauxx-cli` CLI binary
 (`apps/cli`); it is launched by the browser, not run interactively.
 
 The wire contract the host implements is in [`../PROTOCOL.md`](../PROTOCOL.md)
@@ -45,7 +45,7 @@ the extension issues; the host is purely local stdio over the encrypted store.
 | `com.digital_grease.fauxx.chromium.json.template` | Chromium manifest (uses `allowed_origins`). |
 | `com.digital_grease.fauxx.firefox.json.template` | Firefox manifest (uses `allowed_extensions`). |
 | `com.digital_grease.fauxx.json.template` | The original combined template referenced by `PROTOCOL.md`; the two browser-specific files above are preferred. |
-| `fauxx-native-host.sh` | Launcher wrapper the manifest `path` points at; it invokes `fauxx native-host` with the store flags. |
+| `fauxx-native-host.sh` | Launcher wrapper the manifest `path` points at; it invokes `fauxx-cli native-host` with the store flags. |
 | `sample-exchange.json` | A concrete reference exchange. |
 
 ## Why a launcher wrapper
@@ -53,17 +53,17 @@ the extension issues; the host is purely local stdio over the encrypted store.
 The browser launches the host by the absolute `path` in the manifest and does
 not let you specify arguments (it appends the extension origin, and on Chromium a
 parent-window handle, as argv). The Fauxx host is the `native-host` **subcommand**
-of the `fauxx` binary, so the manifest `path` points at the small
+of the `fauxx-cli` binary, so the manifest `path` points at the small
 [`fauxx-native-host.sh`](./fauxx-native-host.sh) wrapper, which `exec`s
-`fauxx native-host` with the right store environment. The browser's appended argv
+`fauxx-cli native-host` with the right store environment. The browser's appended argv
 is ignored by the subcommand. On Windows, use an equivalent `.bat`/`.cmd`
-wrapper (`fauxx.exe native-host`) and point the registry `path` at it.
+wrapper (`fauxx-cli.exe native-host`) and point the registry `path` at it.
 
 ## The store key source (unattended)
 
 The browser starts the host with **no TTY**, so it cannot prompt for a
 passphrase. Use the headless **encrypted-key-file** key source: a passphrase file
-unlocking an Argon2id-wrapped key (the `fauxx` global `--passphrase-file` /
+unlocking an Argon2id-wrapped key (the `fauxx-cli` global `--passphrase-file` /
 `FAUXX_PASSPHRASE_FILE` flag), as the wrapper sets up. Lock the passphrase file
 down to your user (`chmod 600`). The OS keystore default is only viable here if
 your keystore unlocks without an interactive prompt for the browser's session.
@@ -74,12 +74,12 @@ your keystore unlocks without an interactive prompt for the browser's session.
 
    ```fish
    cargo build --release -p fauxx-cli
-   # the binary is target/release/fauxx
+   # the binary is target/release/fauxx-cli
    ```
 
 2. **Set up the launcher.** Copy `fauxx-native-host.sh` somewhere stable (a path
    with no spaces), make it executable, and edit the three `REPLACE` values:
-   `FAUXX_BIN` (absolute path to the built `fauxx`), `FAUXX_DB`, and
+   `FAUXX_BIN` (absolute path to the built `fauxx-cli`), `FAUXX_DB`, and
    `FAUXX_PASSPHRASE_FILE`.
 
    ```fish
@@ -132,7 +132,7 @@ encrypted store):
 cargo test -p fauxx-cli native_host
 ```
 
-`fauxx native-host --help` shows the global store flags the wrapper passes.
+`fauxx-cli native-host --help` shows the global store flags the wrapper passes.
 
 ## Troubleshooting
 

@@ -7,8 +7,8 @@
 # later version. See <https://www.gnu.org/licenses/>.
 #
 # Container image for the Fauxx headless homelab mode (C8 #35). Multi-stage:
-# build the `fauxx` CLI with the pinned toolchain, then ship a slim runtime that
-# runs `fauxx serve` as a NON-root user. Build with:
+# build the `fauxx-cli` CLI with the pinned toolchain, then ship a slim runtime that
+# runs `fauxx-cli serve` as a NON-root user. Build with:
 #
 #   docker build -f deploy/Dockerfile -t fauxx-desktop .
 #
@@ -47,11 +47,11 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system fauxx \
-    && useradd --system --gid fauxx --home-dir /var/lib/fauxx --shell /usr/sbin/nologin fauxx \
+    && useradd --system --gid fauxx-cli --home-dir /var/lib/fauxx-cli --shell /usr/sbin/nologin fauxx \
     && mkdir -p /var/lib/fauxx /etc/fauxx \
     && chown -R fauxx:fauxx /var/lib/fauxx
 
-COPY --from=build /src/target/release/fauxx /usr/local/bin/fauxx
+COPY --from=build /src/target/release/fauxx-cli /usr/local/bin/fauxx-cli
 
 # The store, key file, and passphrase file live here (mount a volume).
 VOLUME ["/var/lib/fauxx"]
@@ -63,4 +63,4 @@ WORKDIR /var/lib/fauxx
 
 # The serve config is bind-mounted at /etc/fauxx/serve.json by the operator
 # (see deploy/serve.example.json and deploy/docker-compose.yml).
-ENTRYPOINT ["/usr/local/bin/fauxx", "serve", "--config", "/etc/fauxx/serve.json"]
+ENTRYPOINT ["/usr/local/bin/fauxx-cli", "serve", "--config", "/etc/fauxx/serve.json"]

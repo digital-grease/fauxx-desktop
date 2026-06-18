@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx schedule`: preview the household action timeline (C1 #10, O4).
+//! `fauxx-cli schedule`: preview the household action timeline (C1 #10, O4).
 //!
 //! A thin shim that assembles one [`DeviceIntent`] per device (the local device
 //! plus every currently paired peer), asks the core to plan the household day

@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! End-to-end CLI tests for the C3 deterministic-channel defense surface:
-//! `broker`, `dsar`, `alias`, and `anchor`. Drives the compiled `fauxx` binary
+//! `broker`, `dsar`, `alias`, and `anchor`. Drives the compiled `fauxx-cli` binary
 //! against a temp store using the headless encrypted-key-file key source (NEVER
 //! the OS keystore, to stay hermetic). Covers each group's happy path plus the
 //! exit-code contract on a missing entity.

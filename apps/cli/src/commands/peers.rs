@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx peers` and `fauxx unpair`: list and revoke cross-device peers.
+//! `fauxx-cli peers` and `fauxx-cli unpair`: list and revoke cross-device peers.
 //!
 //! `peers` lists paired (trusted) peers by default, or mDNS-discovered
 //! (untrusted) peers with `--discovered`; `--json` emits the structured list.

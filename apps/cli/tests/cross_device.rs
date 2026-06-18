@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! End-to-end CLI tests for the C1 cross-device surface: drive the compiled
-//! `fauxx` binary against a temp store using the headless encrypted-key-file key
+//! `fauxx-cli` binary against a temp store using the headless encrypted-key-file key
 //! source (NEVER the OS keystore, to stay hermetic). Covers `pair show`,
 //! `mode` round-trip and persistence across process invocations, `pair add`
 //! with a malformed payload (exit 2), an empty `peers` list, and a single-device
@@ -48,9 +48,9 @@ impl Fixture {
         })
     }
 
-    /// Run `fauxx <args...>` with this fixture's store flags prepended.
+    /// Run `fauxx-cli <args...>` with this fixture's store flags prepended.
     fn run(&self, args: &[&str]) -> Result<Output> {
-        let bin = env!("CARGO_BIN_EXE_fauxx");
+        let bin = env!("CARGO_BIN_EXE_fauxx-cli");
         Command::new(bin)
             .arg("--db")
             .arg(&self.db)
@@ -58,7 +58,7 @@ impl Fixture {
             .arg(&self.passphrase_file)
             .args(args)
             .output()
-            .context("spawning fauxx binary")
+            .context("spawning fauxx-cli binary")
     }
 }
 

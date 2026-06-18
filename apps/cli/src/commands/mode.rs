@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx mode` (show) and `fauxx mode set <coherent|fragmentation>`.
+//! `fauxx-cli mode` (show) and `fauxx-cli mode set <coherent|fragmentation>`.
 //!
 //! Thin shims over the core coordination-mode API. The mode persists in the
 //! encrypted store, so a `set` survives across process invocations against the

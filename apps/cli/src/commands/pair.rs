@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx pair ...`: show this device's pairing QR, or add a scanned peer.
+//! `fauxx-cli pair ...`: show this device's pairing QR, or add a scanned peer.
 //!
 //! Thin shims over the core sync API. `show` renders the QR the phone scans
 //! (unicode block form for the terminal) plus the fingerprint and the raw

@@ -25,7 +25,7 @@ weaker isolation guarantee (it runs in your normal browser profile).
 ## What it does
 
 - Receives **decoy plans** from the headless Fauxx Core over a local
-  native-messaging connection (the Rust host is the `fauxx native-host`
+  native-messaging connection (the Rust host is the `fauxx-cli native-host`
   subcommand; see [`native-host/README.md`](./native-host/README.md)), resolves
   them to a curated set of reputable HTTPS sites, and issues background fetches
   (or, opt-in, opens a tab) to build persona-category-aligned signal.
@@ -101,7 +101,7 @@ There is no build step. The extension is plain JS/JSON/HTML/CSS.
 
 The extension speaks to the Core through a small local **native-messaging
 host** process that owns a `fauxx_core::Core` handle. That host is implemented
-as the **`fauxx native-host`** subcommand of the CLI (`apps/cli`); install and
+as the **`fauxx-cli native-host`** subcommand of the CLI (`apps/cli`); install and
 registration steps are in [`native-host/README.md`](./native-host/README.md).
 
 The wire contract it implements is specified in [`PROTOCOL.md`](./PROTOCOL.md)
@@ -131,7 +131,7 @@ site table when you opt in. No traffic is generated unless you opt in.
 | `src/category_sites.js` | Bundled category->HTTPS-site table (mirrors the core JSON). |
 | `src/gpc_rules.json` | `declarativeNetRequest` ruleset that sets `Sec-GPC: 1`. |
 | `popup/` | The opt-in control surface (popup + options page). |
-| `native-host/` | Manifest templates, launcher wrapper, install README, and sample exchange for the `fauxx native-host` host. |
+| `native-host/` | Manifest templates, launcher wrapper, install README, and sample exchange for the `fauxx-cli native-host` host. |
 | `PROTOCOL.md` | The full native-messaging contract. |
 
 ## License

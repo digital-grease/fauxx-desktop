@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx export`: write an efficacy snapshot to CSV/JSON/PDF (C4 #23).
+//! `fauxx-cli export`: write an efficacy snapshot to CSV/JSON/PDF (C4 #23).
 //!
 //! Thin shim over `core.export_efficacy_snapshot`: it builds the artifact in the
 //! core (against the persona-intent baseline) and writes the bytes to the

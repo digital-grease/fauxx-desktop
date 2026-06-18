@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx campaign ...`: goal-driven campaigns, the closed loop (C8 #33).
+//! `fauxx-cli campaign ...`: goal-driven campaigns, the closed loop (C8 #33).
 //!
 //! Thin shims over the core campaign planner. The goal model, the gap-to-
 //! intensity mapping, the dwell/lifecycle, and all persistence live in the core;

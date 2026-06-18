@@ -139,7 +139,7 @@ fn run() -> ExitCode {
     eprintln!(
         "fauxx-desktop was built without the `gui` feature.\n\
          Rebuild with `cargo run -p fauxx-desktop --features gui`, or run the \
-         headless `fauxx` CLI."
+         headless `fauxx-cli` CLI."
     );
     // Exit code 2: usage / wrong build configuration.
     ExitCode::from(2)

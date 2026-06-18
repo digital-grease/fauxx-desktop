@@ -4,7 +4,7 @@
 # every push; run it before cutting a release (or on demand) to confirm the
 # determinism levers still hold.
 #
-# It checks out the repo TWICE into different paths and builds the headless `fauxx`
+# It checks out the repo TWICE into different paths and builds the headless `fauxx-cli`
 # binary in each with the same levers the release uses: a pinned toolchain
 # (1.96.0), --locked deps, SOURCE_DATE_EPOCH, CARGO_INCREMENTAL=0, and a
 # --remap-path-prefix that maps each checkout's distinct path to the same /build
@@ -53,16 +53,16 @@ jobs:
         working-directory: build-a
         env:
           RUSTFLAGS: "--remap-path-prefix=${{ github.workspace }}/build-a=/build"
-        run: cargo build --release --locked --bin fauxx
+        run: cargo build --release --locked --bin fauxx-cli
       - name: Build B (release, locked, path-remapped)
         working-directory: build-b
         env:
           RUSTFLAGS: "--remap-path-prefix=${{ github.workspace }}/build-b=/build"
-        run: cargo build --release --locked --bin fauxx
+        run: cargo build --release --locked --bin fauxx-cli
       - name: Compare byte-for-byte
         run: |
-          a="build-a/target/release/fauxx"
-          b="build-b/target/release/fauxx"
+          a="build-a/target/release/fauxx-cli"
+          b="build-b/target/release/fauxx-cli"
           sha_a="$(sha256sum "$a" | cut -d' ' -f1)"
           sha_b="$(sha256sum "$b" | cut -d' ' -f1)"
           echo "build A sha256 = $sha_a"

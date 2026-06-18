@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx anchor ...`: the account-anchor identity-linkage inventory (C3 #19).
+//! `fauxx-cli anchor ...`: the account-anchor identity-linkage inventory (C3 #19).
 //!
 //! Thin shims over the core anchor API. This is a READ-ONLY analysis inventory:
 //! it records what the user types and scores it; it NEVER scrapes or automates

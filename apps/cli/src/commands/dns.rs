@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx dns ...`: per-persona DNS strategy (C7 #31).
+//! `fauxx-cli dns ...`: per-persona DNS strategy (C7 #31).
 //!
 //! Thin shims over the core DNS API. The strategy persists in the encrypted
 //! store; the EXPLICIT observer trade-off note (who sees this persona's lookups)

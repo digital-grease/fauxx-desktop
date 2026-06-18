@@ -17,7 +17,7 @@
 //! Shared test fixture for the end-to-end CLI tests: a temp store (db +
 //! passphrase file) using the headless encrypted-key-file key source (NEVER the
 //! OS keystore, to keep the tests hermetic), and helpers to invoke the compiled
-//! `fauxx` binary with the matching global flags.
+//! `fauxx-cli` binary with the matching global flags.
 
 #![allow(dead_code)]
 
@@ -50,9 +50,9 @@ impl Fixture {
         })
     }
 
-    /// Run `fauxx <args...>` with this fixture's store flags prepended.
+    /// Run `fauxx-cli <args...>` with this fixture's store flags prepended.
     pub fn run(&self, args: &[&str]) -> Result<Output> {
-        let bin = env!("CARGO_BIN_EXE_fauxx");
+        let bin = env!("CARGO_BIN_EXE_fauxx-cli");
         Command::new(bin)
             .arg("--db")
             .arg(&self.db)
@@ -60,17 +60,17 @@ impl Fixture {
             .arg(&self.passphrase_file)
             .args(args)
             .output()
-            .context("spawning fauxx binary")
+            .context("spawning fauxx-cli binary")
     }
 
-    /// Run `fauxx <args...>` WITHOUT the global store flags (e.g. `serve`, which
+    /// Run `fauxx-cli <args...>` WITHOUT the global store flags (e.g. `serve`, which
     /// resolves its own store config from its config file).
     pub fn run_bare(&self, args: &[&str]) -> Result<Output> {
-        let bin = env!("CARGO_BIN_EXE_fauxx");
+        let bin = env!("CARGO_BIN_EXE_fauxx-cli");
         Command::new(bin)
             .args(args)
             .output()
-            .context("spawning fauxx binary (bare)")
+            .context("spawning fauxx-cli binary (bare)")
     }
 }
 

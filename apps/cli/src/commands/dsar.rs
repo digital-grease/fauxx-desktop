@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! `fauxx dsar ...`: GDPR/CCPA Data Subject Access Request letters (C3 #16).
+//! `fauxx-cli dsar ...`: GDPR/CCPA Data Subject Access Request letters (C3 #16).
 //!
 //! Thin shims over the core DSAR API. Letters are GENERATED and TRACKED here;
 //! nothing is ever auto-sent (the core renders text for manual sending).
