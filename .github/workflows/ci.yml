@@ -4,6 +4,8 @@
 #   - feature-leak-guard        : proves no GUI/system-lib crate is in the
 #                                 default graph (the headless invariant)
 #   - gui                       : builds the desktop crate with `gui` ON
+#   - windows-check             : compiles all cfg(windows) code (headless + gui)
+#                                 so Windows-only bugs surface in CI, not at release
 #   - deny                      : supply-chain policy (advisories/bans/licenses)
 #   - invariants                : project invariant grep-checks
 name: CI
@@ -97,6 +99,28 @@ jobs:
       # clippy type-checks but does not link; a real build catches link-time
       # failures (e.g. a missing -lxdo) that clippy alone would miss.
       - run: cargo build -p fauxx-desktop --features gui
+
+  windows-check:
+    name: cargo check (Windows, headless + gui)
+    runs-on: windows-2022
+    env:
+      # openssl-src (pulled in by rusqlite's vendored-sqlcipher OpenSSL) builds
+      # OpenSSL from source and needs a full Perl; the runner's Git-bash MSYS perl
+      # is missing modules openssl's Configure needs, so point it at the
+      # preinstalled Strawberry Perl (same fix as the release workflow).
+      OPENSSL_SRC_PERL: C:/Strawberry/perl/bin/perl.exe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.96.0"
+      - uses: Swatinem/rust-cache@v2
+      # Compile every cfg(windows) path so Windows-only bugs (which the Linux and
+      # macOS lanes never build) surface as normal CI failures on a plain commit,
+      # not only at release time on the Windows runner. `check` is enough to catch
+      # compile/borrow/type errors and keeps the lane fast.
+      - run: cargo check --workspace --all-targets
+      - run: cargo check -p fauxx-desktop --features gui --all-targets
 
   deny:
     name: cargo deny

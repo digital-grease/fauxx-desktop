@@ -189,7 +189,7 @@ jobs:
       - name: Use Strawberry Perl for openssl-src (Windows)
         if: ${{ runner.os == 'Windows' }}
         shell: bash
-        run: echo 'OPENSSL_SRC_PERL=C:\Strawberry\perl\bin\perl.exe' >> "$GITHUB_ENV"
+        run: echo 'OPENSSL_SRC_PERL=C:/Strawberry/perl/bin/perl.exe' >> "$GITHUB_ENV"
       - name: Install dist-managed system dependencies
         run: dist build ${{ matrix.dist-args }} --print=linkage > /dev/null 2>&1 || true
         shell: bash

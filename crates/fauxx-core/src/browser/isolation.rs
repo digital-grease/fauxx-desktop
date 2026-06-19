@@ -84,10 +84,10 @@ fn real_profile_roots_from(
 
     #[cfg(target_os = "windows")]
     {
-        if let Some(local) = local_app_data {
+        if let Some(local) = &local_app_data {
             roots.push(local.join("Google").join("Chrome").join("User Data"));
         }
-        if let Some(roaming) = app_data {
+        if let Some(roaming) = &app_data {
             roots.push(roaming.join("Mozilla").join("Firefox"));
         }
     }
