@@ -13,7 +13,7 @@
 #   - per-OS archives + installers (shell, powershell) for BOTH binaries
 #     (`fauxx-cli` from apps/cli and `fauxx-desktop` from apps/desktop, gui feature)
 #   - a SHA256 checksum file per artifact
-#   - a GitHub build-provenance attestation per artifact (actions/attest@v4)
+#   - a GitHub build-provenance attestation per artifact (actions/attest-build-provenance@v2)
 #   - a GitHub Release carrying the AGPL-3.0-only license
 #
 # Triggers: a pushed `v*` tag, OR a manual workflow_dispatch.
@@ -181,6 +181,15 @@ jobs:
       - name: Verify Cargo.lock is current (locked deps)
         run: cargo metadata --locked --format-version 1 > /dev/null
         shell: bash
+      # openssl-src (pulled in by rusqlite's vendored-sqlcipher OpenSSL) builds
+      # OpenSSL from source with no-asm, which needs a full Perl. On the Windows
+      # runner the Git-bash MSYS perl is missing modules openssl's Configure needs
+      # (Locale::Maketext::Simple), so point openssl-src at the preinstalled
+      # Strawberry Perl. Linux/macOS use their system perl and are unaffected.
+      - name: Use Strawberry Perl for openssl-src (Windows)
+        if: ${{ runner.os == 'Windows' }}
+        shell: bash
+        run: echo 'OPENSSL_SRC_PERL=C:\Strawberry\perl\bin\perl.exe' >> "$GITHUB_ENV"
       - name: Install dist-managed system dependencies
         run: dist build ${{ matrix.dist-args }} --print=linkage > /dev/null 2>&1 || true
         shell: bash
@@ -289,11 +298,9 @@ jobs:
       # github-attestations = true in dist-workspace.toml). Verifiable later
       # with `gh attestation verify <file> --repo digital-grease/fauxx-desktop`.
       - name: Attest build provenance
-        uses: actions/attest@v4
+        uses: actions/attest-build-provenance@v2
         with:
           subject-path: ${{ steps.build.outputs.uploads }}
-          predicate-type: "https://slsa.dev/provenance/v1"
-          predicate: '{}'
       - name: Upload local artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -348,11 +355,9 @@ jobs:
           } >> "$GITHUB_OUTPUT"
         shell: bash
       - name: Attest global artifacts provenance
-        uses: actions/attest@v4
+        uses: actions/attest-build-provenance@v2
         with:
           subject-path: ${{ steps.build.outputs.uploads }}
-          predicate-type: "https://slsa.dev/provenance/v1"
-          predicate: '{}'
       - name: Upload global artifacts
         uses: actions/upload-artifact@v4
         with:
