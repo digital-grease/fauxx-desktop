@@ -354,7 +354,14 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
         shell: bash
+      # dist's global manifest does not always populate attestable paths (the
+      # installers/source tarball ship via the path globs in the upload step
+      # below). Skip the attest when there is nothing to attest so the release
+      # still publishes; the per-platform binaries are already attested in
+      # build-local-artifacts. (Attesting the installers themselves is a tracked
+      # follow-up.)
       - name: Attest global artifacts provenance
+        if: ${{ steps.build.outputs.uploads != '' }}
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: ${{ steps.build.outputs.uploads }}
