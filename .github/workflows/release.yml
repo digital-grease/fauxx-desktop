@@ -407,10 +407,44 @@ jobs:
           pattern: artifacts-*
           path: target/distrib/
           merge-multiple: true
-      - name: Upload and create GitHub Release
-        run: |
-          dist host --steps=upload --steps=release --tag="${{ needs.plan.outputs.tag }}"
+      # `dist host` prepares/uploads the hosting manifest but does NOT create the
+      # GitHub Release; it just emits the manifest (title / body / prerelease flag)
+      # that the explicit `gh release create` step below consumes.
+      - name: Prepare hosting manifest
+        id: host
         shell: bash
+        run: |
+          dist host --steps=upload --steps=release --tag="${{ needs.plan.outputs.tag }}" --output-format=json > dist-manifest.json
+          echo "manifest=$(jq -c "." dist-manifest.json)" >> "$GITHUB_OUTPUT"
+      # Create the actual GitHub Release with every artifact attached (mirrors
+      # dist's generated workflow, which does this in a discrete step rather than
+      # inside `dist host`). Download all build artifacts into a flat dir, drop the
+      # granular per-job manifests, then publish.
+      - name: Download artifacts for the GitHub Release
+        uses: actions/download-artifact@v4
+        with:
+          pattern: artifacts-*
+          path: artifacts
+          merge-multiple: true
+      - name: Drop granular per-job manifests
+        shell: bash
+        run: rm -f artifacts/*-dist-manifest.json
+      - name: Create GitHub Release
+        env:
+          PRERELEASE_FLAG: "${{ fromJson(steps.host.outputs.manifest).announcement_is_prerelease && '--prerelease' || '' }}"
+          ANNOUNCEMENT_TITLE: "${{ fromJson(steps.host.outputs.manifest).announcement_title }}"
+          ANNOUNCEMENT_BODY: "${{ fromJson(steps.host.outputs.manifest).announcement_github_body }}"
+          RELEASE_COMMIT: "${{ github.sha }}"
+        shell: bash
+        run: |
+          echo "$ANNOUNCEMENT_BODY" > "$RUNNER_TEMP/notes.txt"
+          # PRERELEASE_FLAG must stay unquoted (empty string -> no flag); artifacts/*
+          # is a deliberate glob over the downloaded release files.
+          # shellcheck disable=SC2086,SC2035
+          gh release create "${{ needs.plan.outputs.tag }}" \
+            --target "$RELEASE_COMMIT" $PRERELEASE_FLAG \
+            --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" \
+            artifacts/*
 
   # ---------------------------------------------------------------------------
   # announce: final gate that fails if any upstream job failed. Mirrors dist's
