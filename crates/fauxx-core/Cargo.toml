@@ -1,7 +1,7 @@
 [package]
 name = "fauxx-core"
 description = "Fauxx desktop companion headless core: all real work behind a clean async API, with the Iced GUI and clap CLI as thin clients over it."
-version = "0.1.0-rc.2"
+version = "0.1.0-rc.3"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

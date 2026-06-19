@@ -193,3 +193,10 @@ lto = "fat"
 codegen-units = 1
 strip = "symbols"
 panic = "abort"
+
+# Release artifacts are built by `dist` with `cargo build --profile dist`, so the
+# profile MUST exist or the build fails instantly ("profile `dist` is not
+# defined"). Inherit the hardened release profile above so shipped binaries keep
+# the same lto / strip / panic=abort settings.
+[profile.dist]
+inherits = "release"
