@@ -14,5 +14,11 @@
     "deviceId": "fauxx_desktop",
     "username": null,
     "password": null
+  },
+  "idle": {
+    "enabled": false,
+    "idleThresholdSecs": 300,
+    "stepsPerThreshold": 1,
+    "activeBehavior": "pause"
   }
 }

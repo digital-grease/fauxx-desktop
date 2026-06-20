@@ -39,7 +39,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use anyhow::{bail, Context};
-use fauxx_core::{Config, Core, KeySource};
+use fauxx_core::{Config, Core, IdleScalingConfig, KeySource, RatePlanner};
 use tokio::sync::Notify;
 
 use crate::cli::ServeArgs;
@@ -66,9 +66,30 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
 
     // Fail closed: a store that cannot open is a hard error, never an
     // unencrypted or partial start.
-    let core = Core::open(config)
-        .await
-        .context("opening the encrypted store (serve fails closed)")?;
+    //
+    // Idle gating (C8 #32 U1): when configured + enabled, open the core with a
+    // real per-OS idle source so the campaign tick scales decoy intensity up
+    // while the box is idle and pauses/throttles while the user is active or the
+    // session is locked. Otherwise open ungated (decoy at campaign intensity).
+    let open_ctx = "opening the encrypted store (serve fails closed)";
+    let core = match serve_config.idle.as_ref().filter(|idle| idle.enabled) {
+        Some(idle) => {
+            let policy = IdleScalingConfig::new()
+                .with_idle_threshold_secs(idle.idle_threshold_secs)
+                .with_steps_per_threshold(idle.steps_per_threshold)
+                .with_active_behavior(idle.active_behavior);
+            tracing::info!(
+                idle_threshold_secs = idle.idle_threshold_secs,
+                steps_per_threshold = idle.steps_per_threshold,
+                "serve: idle gating enabled"
+            );
+            let planner = RatePlanner::new(fauxx_core::idle::real_idle_source(), policy);
+            Core::open_with_idle_planner(config, planner)
+                .await
+                .context(open_ctx)?
+        }
+        None => Core::open(config).await.context(open_ctx)?,
+    };
     let status = core.status().await?;
     tracing::info!(
         version = status.version,

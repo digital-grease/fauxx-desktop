@@ -36,6 +36,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context};
+use fauxx_core::ActiveBehavior;
 use serde::{Deserialize, Serialize};
 
 /// The same application qualifier/org/app the core store uses, so the serve
@@ -90,6 +91,13 @@ pub struct ServeConfig {
     /// core default. Set it to avoid a conflict when several Fauxx instances run
     /// on one host. Only relevant when `lan_sync` is on.
     pub sync_port: Option<u16>,
+
+    /// Idle/lock-aware rate gating (C8 #32 U1). `None` (or absent) leaves the
+    /// daemon ungated (decoy runs at the campaign intensity). When present and
+    /// enabled, serve opens the core with a real per-OS idle source so decoy
+    /// activity scales up while the box is idle and pauses (or throttles) while
+    /// the user is active or the session is locked.
+    pub idle: Option<ServeIdleConfig>,
 }
 
 impl Default for ServeConfig {
@@ -102,6 +110,38 @@ impl Default for ServeConfig {
             mqtt: None,
             lan_sync: false,
             sync_port: None,
+            idle: None,
+        }
+    }
+}
+
+/// The idle/lock rate-gating slice of the serve config (C8 #32 U1). A plain
+/// mirror of the fields `fauxx_core::IdleScalingConfig` needs, plus an `enabled`
+/// toggle so an operator can keep the policy but turn gating off.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ServeIdleConfig {
+    /// Whether idle gating is active. When `false`, the daemon runs ungated.
+    pub enabled: bool,
+    /// Continuous idle time (seconds) past which decoy intensity scales up.
+    pub idle_threshold_secs: u64,
+    /// One intensity-ladder step per whole multiple of the threshold spent idle
+    /// (clamped at the top). `0` disables stepping (idle uses the base unscaled).
+    pub steps_per_threshold: u32,
+    /// What an active or locked session does: pause outright, or throttle to a
+    /// floor intensity. Serialized as `"pause"` or `{"throttle": "low"}`.
+    pub active_behavior: ActiveBehavior,
+}
+
+impl Default for ServeIdleConfig {
+    fn default() -> Self {
+        // Ramp after five minutes idle, one ladder step per five-minute multiple,
+        // and pause while active or locked (the conservative default).
+        Self {
+            enabled: false,
+            idle_threshold_secs: 5 * 60,
+            steps_per_threshold: 1,
+            active_behavior: ActiveBehavior::Pause,
         }
     }
 }

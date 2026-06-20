@@ -37,6 +37,12 @@ ignore = [
     # macOS Metal backend (metal -> paste) under wgpu/iced. No maintained
     # drop-in replacement.
     "RUSTSEC-2024-0436",
+    # `mach` (0.1.x and 0.3.x), UNMAINTAINED (not a vulnerability; the maintained
+    # fork is `mach2`). Pulled ONLY on macOS by `user-idle` (the C8 #32 idle-time
+    # backend, IOKit/mach HIDIdleTime). It never links on Linux/Windows (the idle
+    # source is target-gated to macOS+Windows, and `mach` is macOS-only), and the
+    # query is read-only. Cannot be dropped without forking user-idle off `mach`.
+    "RUSTSEC-2020-0168",
     # NOTE: the tokio broadcast unsoundness (RUSTSEC-2025-0023) is fixed by the
     # patched tokio pin (root Cargo.toml), not ignored.
 ]

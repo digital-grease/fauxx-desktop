@@ -150,12 +150,21 @@ keyring-core = { workspace = true }
 [target.'cfg(target_os = "linux")'.dependencies]
 dbus-secret-service-keyring-store = { workspace = true, features = ["crypto-rust", "vendored"] }
 linux-keyutils-keyring-store = { workspace = true }
+# Idle/lock detection via logind D-Bus (C8 #32). Safe async API; the rate planner
+# consumes it through the `IdleSource` trait. See idle::detect.
+zbus = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { workspace = true, features = ["keychain", "protected"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-native-keyring-store = { workspace = true }
+
+# Idle-time detection on macOS/Windows (C8 #32). Kept to these targets so its X11
+# Linux backend never enters the Linux graph. Idle-time only, no lock detection;
+# UNVALIDATED on real hardware (the Linux logind path is the tested one).
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+user-idle = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

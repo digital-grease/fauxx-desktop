@@ -59,8 +59,10 @@
 //! correct (it just never ramps without a real idle signal). The trait is the
 //! stable seam those backends slot into without changing the rate planner.
 
+pub mod detect;
 pub mod planner;
 
+pub use detect::real_idle_source;
 pub use planner::{ActiveBehavior, IdleScalingConfig, RateDecision, RatePlanner};
 
 use std::time::Duration;

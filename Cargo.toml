@@ -142,6 +142,18 @@ base64 = "=0.22.1"
 # mirroring the Android PoissonScheduler), with a fixed seed in tests.
 rand = "=0.10.1"
 
+# --- Idle/lock detection for the rate planner (C8 #32 U1) ---
+# Linux: query logind (org.freedesktop.login1) over D-Bus for IdleHint /
+# IdleSinceHint / LockedHint. Safe async API (no unsafe), and `tokio` reuses the
+# runtime; pinned to 5.16.0 to match the version ksni already locks (no second
+# copy). Works on both Wayland and X11 (logind is display-server agnostic).
+zbus = { version = "=5.16.0", features = ["tokio"] }
+# macOS/Windows: a safe wrapper over the platform idle-time APIs (IOKit
+# HIDIdleTime / GetLastInputInfo). Referenced ONLY in the macOS/Windows target
+# blocks so its X11 backend never enters the Linux graph. Idle-time only (no lock
+# detection on those platforms yet); UNVALIDATED on real macOS/Windows hardware.
+user-idle = "=0.6.0"
+
 # --- Real-browser integration (C2 #11 R1) ---
 # Drive a dedicated, isolated-but-real Chromium decoy profile over CDP. Default
 # features = [bytes] only: the `fetcher` (browser auto-download) is left OFF (we
