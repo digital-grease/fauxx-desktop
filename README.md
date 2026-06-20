@@ -35,6 +35,27 @@ These are enforced in code, not just intended:
 - **Encrypted at rest.** State lives in a SQLCipher database whose key is held in the OS keystore, with an Argon2id passphrase-file fallback for headless hosts. Secrets are never written to the database or logs.
 - **Fail closed.** When a configured egress, keystore, or guardrail check cannot be satisfied, the affected action stops rather than degrading to a less-private path.
 
+## Install
+
+Prebuilt binaries for Linux, macOS, and Windows are attached to each [GitHub release](https://github.com/digital-grease/fauxx-desktop/releases) (both the `fauxx-cli` CLI and the `fauxx-desktop` GUI). Each archive ships with a `.sha256` checksum and a Sigstore build-provenance attestation.
+
+This project does not ask you to pipe a remote script into a shell. Download, verify, then run.
+
+Verify and extract an archive (Linux/macOS shown; the Windows `.zip` works the same way):
+
+```sh
+# 1. Download the archive for your platform plus its checksum from the release page.
+# 2. Verify the download against the published checksum:
+sha256sum -c fauxx-cli-x86_64-unknown-linux-gnu.tar.xz.sha256
+# 3. Extract and run:
+tar -xJf fauxx-cli-x86_64-unknown-linux-gnu.tar.xz
+./fauxx-cli-x86_64-unknown-linux-gnu/fauxx-cli --version
+```
+
+You can also verify provenance with `gh attestation verify <file> --repo digital-grease/fauxx-desktop`.
+
+An installer script (`*-installer.sh` / `*-installer.ps1`) is also attached; it verifies the archive checksum for you. Download it, review it, then run it as a local file (do not pipe it into a shell). Until code-signing certificates are provisioned, the binaries are unsigned, so macOS Gatekeeper and Windows SmartScreen will warn on first launch.
+
 ## Build
 
 Requires Rust (see [`rust-toolchain.toml`](./rust-toolchain.toml)). All dependencies are version-pinned in the workspace.

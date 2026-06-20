@@ -219,6 +219,11 @@ jobs:
           dist build ${{ matrix.dist-args }} --output-format=json > dist-manifest.json
           echo "dist ran successfully"
           cat dist-manifest.json
+          # Copy this target's manifest to the shared name the global job ingests.
+          # The global installer build reads these per-target manifests to embed
+          # each archive's sha256 into the shell/powershell installers (without
+          # this the installers ship with no checksum and skip verification).
+          cp dist-manifest.json "$BUILD_MANIFEST_NAME"
           # Stage the produced artifacts for upload and attestation.
           jq --raw-output ".artifacts[]?.path | select( . != null )" dist-manifest.json > uploads.txt
           {
@@ -437,6 +442,14 @@ jobs:
         shell: bash
         run: |
           echo "$ANNOUNCEMENT_BODY" > "$RUNNER_TEMP/notes.txt"
+          # Policy: never instruct piping a remote script into a shell. Rewrite
+          # dist's generated install one-liners ("curl ... | sh", "irm ... | iex")
+          # into download-then-run form so the published notes tell users to fetch
+          # the installer, review it, and then run it. Anchored on the dist
+          # template so the surrounding notes (download table, attestation
+          # instructions) are untouched.
+          perl -i -pe 's{-LsSf (\S+/([^/\s]+)) \| sh}{-fLO $1\n# review ./$2, then run it (do not pipe a remote script to sh):\nsh ./$2}g' "$RUNNER_TEMP/notes.txt"
+          perl -i -pe 's{-c "irm (\S+/([^/\s]+)) \| iex"}{-c "irm $1 -OutFile $2"\n# review ./$2, then run it (do not pipe a remote script to iex):\npowershell -ExecutionPolicy Bypass -File $2}g' "$RUNNER_TEMP/notes.txt"
           # PRERELEASE_FLAG must stay unquoted (empty string -> no flag); artifacts/*
           # is a deliberate glob over the downloaded release files.
           # shellcheck disable=SC2086,SC2035
