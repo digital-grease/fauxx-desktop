@@ -33,11 +33,13 @@ proptest! {
     }
 
     /// A seeded secret literal, present as a standalone (word-bounded) token in a
-    /// line, is never present verbatim in the scrubbed output. The literal is at
-    /// least 2 chars and starts with a letter so it cannot collide with the
-    /// numeric/IP redaction families.
+    /// line, is never present verbatim in the scrubbed output. The literal is
+    /// uppercase/digits/underscore (4+ chars): that keeps it clear of the
+    /// numeric/IP redaction families AND guarantees it cannot appear as an
+    /// incidental substring of the lowercase wrapper words or the "<redacted>"
+    /// placeholder (which would be a false "leak", not a real one).
     #[test]
-    fn scrubber_never_leaks_seeded_literal(secret in "[A-Za-z][A-Za-z0-9_]{1,39}") {
+    fn scrubber_never_leaks_seeded_literal(secret in "[A-Z][A-Z0-9_]{3,30}") {
         let r = Redactions::new([secret.clone()]).map_err(fail)?;
         // Word-delimited on both sides (the scrubber redacts seeded literals at
         // token boundaries, by design, to avoid eating substrings of real words).

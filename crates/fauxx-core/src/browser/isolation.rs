@@ -389,10 +389,22 @@ fn host_and_path(url: &str) -> Option<(String, String)> {
 mod tests {
     use super::*;
 
+    /// An absolute path on every OS (Unix `/home/u/<rel>`, Windows
+    /// `C:\home\u\<rel>`), so the isolation logic is exercised with genuinely
+    /// absolute inputs cross-platform instead of being rejected for not being
+    /// absolute (a Unix-style `/home/...` path is not absolute on Windows).
+    fn abs(rel: &str) -> PathBuf {
+        #[cfg(windows)]
+        let base = PathBuf::from(r"C:\home\u");
+        #[cfg(not(windows))]
+        let base = PathBuf::from("/home/u");
+        base.join(rel)
+    }
+
     #[test]
     fn equal_paths_overlap_and_are_refused() {
-        let real = PathBuf::from("/home/u/.config/google-chrome");
-        let decoy = PathBuf::from("/home/u/.config/google-chrome");
+        let real = abs(".config/google-chrome");
+        let decoy = abs(".config/google-chrome");
         assert!(matches!(
             ensure_isolated_from_real_profiles(&decoy, &[real]),
             Err(CoreError::Browser(_))
@@ -402,8 +414,8 @@ mod tests {
     #[test]
     fn decoy_nested_inside_real_is_refused() {
         // Decoy dir lives *inside* a real Chrome profile: the worst case.
-        let real = PathBuf::from("/home/u/.config/google-chrome");
-        let decoy = PathBuf::from("/home/u/.config/google-chrome/Default/decoy");
+        let real = abs(".config/google-chrome");
+        let decoy = abs(".config/google-chrome/Default/decoy");
         assert!(matches!(
             ensure_isolated_from_real_profiles(&decoy, &[real]),
             Err(CoreError::Browser(_))
@@ -414,8 +426,8 @@ mod tests {
     fn real_nested_inside_decoy_is_refused() {
         // The reverse nesting must also be refused (decoy is an ancestor of a
         // real profile root), so we never wrap a logged-in profile either.
-        let real = PathBuf::from("/home/u/data/decoy-profiles/google-chrome");
-        let decoy = PathBuf::from("/home/u/data/decoy-profiles");
+        let real = abs("data/decoy-profiles/google-chrome");
+        let decoy = abs("data/decoy-profiles");
         assert!(matches!(
             ensure_isolated_from_real_profiles(&decoy, &[real]),
             Err(CoreError::Browser(_))
@@ -426,15 +438,15 @@ mod tests {
     fn sibling_with_shared_prefix_string_is_allowed() {
         // `.../google-chrome-decoy` must NOT be treated as nested under
         // `.../google-chrome` despite the shared string prefix.
-        let real = PathBuf::from("/home/u/.config/google-chrome");
-        let decoy = PathBuf::from("/home/u/.config/google-chrome-decoy");
+        let real = abs(".config/google-chrome");
+        let decoy = abs(".config/google-chrome-decoy");
         assert!(ensure_isolated_from_real_profiles(&decoy, &[real]).is_ok());
     }
 
     #[test]
     fn distinct_decoy_dir_is_allowed() {
-        let real = PathBuf::from("/home/u/.config/chromium");
-        let decoy = PathBuf::from("/home/u/.local/share/fauxx/decoy-profiles/abc");
+        let real = abs(".config/chromium");
+        let decoy = abs(".local/share/fauxx/decoy-profiles/abc");
         let ok = ensure_isolated_from_real_profiles(&decoy, &[real]);
         assert!(ok.is_ok(), "distinct dir should be allowed: {ok:?}");
     }
@@ -443,7 +455,7 @@ mod tests {
     fn relative_decoy_dir_is_refused() {
         // A relative path cannot be compared against absolute real roots, so it
         // must fail closed rather than slip through the overlap check.
-        let real = PathBuf::from("/home/u/.config/google-chrome");
+        let real = abs(".config/google-chrome");
         let decoy = PathBuf::from("relative/decoy");
         assert!(matches!(
             ensure_isolated_from_real_profiles(&decoy, &[real]),
