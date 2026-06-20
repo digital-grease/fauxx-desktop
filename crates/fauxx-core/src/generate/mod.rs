@@ -30,7 +30,8 @@
 //!    persona packs) and a freshness/expiry the consumer checks.
 //!
 //! Both artifacts ride the sealed channel as the [`SyncBody::SignedArtifact`]
-//! wire kind; see [`crate::sync::wire`] and `docs/SYNC_PROTOCOL.md`.
+//! wire kind; see [`crate::sync::wire`] for the wire format and [`crate::sync`]
+//! for the security model.
 //!
 //! ## Honesty
 //!

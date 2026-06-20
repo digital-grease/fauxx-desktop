@@ -108,7 +108,7 @@ identical bytes, and the signature does not spuriously fail.
 ## Step 4: delivery over O1 + freshness fallback
 
 A `SyncBody::SignedArtifact` wire kind carries the artifact over the existing
-LanSync sealed channel to paired peers (see `docs/SYNC_PROTOCOL.md` section 7).
+LanSync sealed channel to paired peers (see the `sync::wire` module).
 The unknown-kind fail-closed posture is preserved: a peer that does not know the
 kind rejects it at parse and falls back.
 

@@ -26,7 +26,7 @@
 //!    e.g. `~/.config/fauxx/serve.json` on Linux),
 //!
 //! A documented example lives in `deploy/serve.example.json`; the full schema is
-//! documented in `docs/DEPLOYMENT.md`.
+//! the [`ServeConfig`] type below (and `fauxx-cli serve --help`).
 //!
 //! The config never carries the STORE passphrase inline: it points at a
 //! passphrase FILE (the headless Argon2id passphrase-file KeySource), so the
@@ -76,13 +76,14 @@ pub struct ServeConfig {
 
     /// The Home Assistant MQTT bridge configuration. `None` (or absent) leaves
     /// the bridge OFF. Enabling it requires building the binary with the `mqtt`
-    /// feature; see `docs/DEPLOYMENT.md`.
+    /// feature.
     pub mqtt: Option<ServeMqttConfig>,
 
     /// Whether to bring up live LAN persona sync (C1 #7): mDNS advertise/browse +
     /// the TCP inbound listener for sealed persona frames. `false` (the default)
     /// opens no sockets and advertises nothing; the `--lan-sync` flag also forces
-    /// this on. See `docs/DEPLOYMENT.md`.
+    /// this on. The wire format and security model live in
+    /// [`fauxx_core::sync::wire`] and [`fauxx_core::sync`].
     pub lan_sync: bool,
 
     /// The TCP port the LAN sync listener binds and advertises. `None` uses the

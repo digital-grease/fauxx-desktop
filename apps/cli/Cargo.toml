@@ -27,7 +27,8 @@ path = "src/main.rs"
 # Off by default so the standard homelab build links no MQTT client. Enabling it
 # turns on the `fauxx-core` `mqtt` feature (the cinder RumqttcBridge), so
 # `fauxx-cli serve --mqtt` can start the Home Assistant bridge. Build with
-# `cargo build -p fauxx-cli --features mqtt`. See docs/DEPLOYMENT.md.
+# `cargo build -p fauxx-cli --features mqtt`. See `fauxx-cli serve --help` and
+# the ServeConfig type for the headless deployment config.
 mqtt = ["fauxx-core/mqtt"]
 
 [dependencies]

@@ -68,7 +68,7 @@ To run the GUI, build with the `gui` feature and run `fauxx-desktop` (a graphica
 
 ## Cross-device sync
 
-Pair the desktop with the phone over the local network: one device shows a QR payload carrying its public key and a connection hint, the other scans (or pastes) it. After pairing, personas and signed artifacts move over a sealed channel that unpaired devices cannot read or write. The wire contract is documented in [`docs/SYNC_PROTOCOL.md`](./docs/SYNC_PROTOCOL.md).
+Pair the desktop with the phone over the local network: one device shows a QR payload carrying its public key and a connection hint, the other scans (or pastes) it. After pairing, personas and signed artifacts move over a sealed channel that unpaired devices cannot read or write. The wire contract and security model live in the `crate::sync::wire` and `crate::sync` modules.
 
 ## Status
 

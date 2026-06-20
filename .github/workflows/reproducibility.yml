@@ -1,8 +1,8 @@
 # Reproducibility verification (C0 #6): proves the release build is byte-identical
 # across two INDEPENDENT rebuilds, the acceptance criterion the release pipeline
-# itself only documents. Manual-dispatch only, so it never slows the normal CI on
-# every push; run it before cutting a release (or on demand) to confirm the
-# determinism levers still hold.
+# itself only documents. Runs weekly and on manual dispatch, so it never slows the
+# normal CI on every push; run it before cutting a release (or on demand) to
+# confirm the determinism levers still hold.
 #
 # It checks out the repo TWICE into different paths and builds the headless `fauxx-cli`
 # binary in each with the same levers the release uses: a pinned toolchain
@@ -13,13 +13,17 @@
 # nondeterminism to fix.
 #
 # Scope note: this verifies the CLI binary on one OS/runner (the achievable,
-# automatable guarantee). A fuller cross-machine independent rebuild is the manual
-# procedure in docs/RELEASING.md.
+# automatable guarantee). A fuller cross-machine independent rebuild is a manual
+# procedure done outside CI.
 
 name: Reproducibility check
 
 on:
   workflow_dispatch:
+  # Weekly, so byte-identical-build drift is caught continuously, not only when a
+  # maintainer remembers to run it before a release.
+  schedule:
+    - cron: "0 7 * * 1"
 
 permissions:
   contents: read

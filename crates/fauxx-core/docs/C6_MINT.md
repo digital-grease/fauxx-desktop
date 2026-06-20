@@ -80,8 +80,8 @@ and verifies with `verify_pack`.
 ## Delivery over O1 + verify-before-write
 
 A `SyncBody::PersonaPack` wire kind carries the signed pack (its JSON bytes, as a
-base64 string) over the existing LanSync sealed channel to paired peers (see
-`docs/SYNC_PROTOCOL.md` section 7). The unknown-kind fail-closed posture is
+base64 string) over the existing LanSync sealed channel to paired peers (see the
+`sync::wire` module). The unknown-kind fail-closed posture is
 preserved: a peer that does not know the kind rejects it at parse. The receiver
 VERIFIES the pack signature (P4 `verify_pack`) BEFORE importing the personas: a
 tampered, unsigned, wrong-key, or unknown/newer-schema-version pack is rejected

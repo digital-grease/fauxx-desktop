@@ -71,7 +71,7 @@ export function parseGpcWellKnown(body) {
   let value;
   try {
     value = JSON.parse(trimmed);
-  } catch (e) {
+  } catch {
     return notAdvertised;
   }
   if (typeof value !== "object" || value === null || Array.isArray(value)) {

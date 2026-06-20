@@ -33,8 +33,8 @@
 //! elevated, OS-specific plumbing. So [`Egress::Vpn`] is modeled as carrying the
 //! VPN's config and routing through a LOCAL SOCKS/HTTP front the VPN exposes (the
 //! same `--proxy-server` seam), and full per-persona VPN isolation via namespaces
-//! is documented as a follow-up (see `docs/C7_NETWORK.md`). The decoy BROWSER is
-//! the only egress/DNS consumer here; a non-browser fetch path is out of scope.
+//! is tracked as a follow-up. The decoy BROWSER is the only egress/DNS consumer
+//! here; a non-browser fetch path is out of scope.
 //!
 //! ## Fail closed (no real-IP leak)
 //!

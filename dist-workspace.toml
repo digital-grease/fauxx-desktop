@@ -6,8 +6,8 @@
 # [package.metadata.dist] opt-in in apps/cli and apps/desktop, required because
 # those crates set `publish = false` (dist skips unpublished packages otherwise).
 # Everything else (targets, installers, signing, CI) lives here, so the release
-# layer stays mostly isolated (see docs/RELEASING.md for the rationale and the
-# "dist is an orchestration convenience, not a reproducibility guarantee" caveat).
+# layer stays mostly isolated. (dist is an orchestration convenience, not a
+# reproducibility guarantee.)
 #
 # License: AGPL-3.0-only. See LICENSE at the repo root. The release notes and
 # every generated installer carry this license (license = "AGPL-3.0-only" is
@@ -63,7 +63,7 @@ targets = [
 # requires per-package [package.metadata.wix] metadata (a "manufacturer" and a
 # GUID) inside each crate's Cargo.toml, and this milestone may not edit the
 # crates. Enabling msi is tracked as a follow-up that belongs to the crate
-# owners (see docs/RELEASING.md, "Windows installer / MSI"). Windows users still
+# owners (the "Windows installer / MSI" follow-up). Windows users still
 # get a signed .exe inside the zip archive plus the powershell installer.
 installers = ["shell", "powershell"]
 
@@ -72,8 +72,8 @@ installers = ["shell", "powershell"]
 checksum = "sha256"
 
 # Always publish the auto-generated source tarball alongside the release.
-# See docs/RELEASING.md for the explicit statement that this tarball is NOT
-# guaranteed to be bitwise reproducible by dist itself.
+# Note: this source tarball is NOT guaranteed to be bitwise reproducible by dist
+# itself.
 source-tarball = true
 
 # Supply-chain evidence: enable GitHub's build provenance attestations. The
@@ -109,8 +109,8 @@ allow-dirty = ["ci", "msi"]
 # Both blocks are gated on repository secrets. When the secrets are absent (the
 # current state: this repo is private and the certs are not provisioned yet),
 # signing is skipped and the release still succeeds with unsigned binaries plus
-# the GitHub attestations above. Provisioning the secrets is a documented TODO
-# in docs/RELEASING.md, NOT a hard build dependency.
+# the GitHub attestations above. Provisioning the secrets is a documented TODO,
+# NOT a hard build dependency.
 # ---------------------------------------------------------------------------
 
 # Windows Authenticode signing via SSL.com eSigner (cloud signing, no local
@@ -133,8 +133,7 @@ ssldotcom-windows-sign = "prod"
 # APPLE_TEAM_ID, APPLE_API_KEY / APPLE_API_ISSUER). When those secrets are
 # absent the step is skipped and the macOS archive ships unsigned, gatekeeper
 # notwithstanding. TODO(secrets): provision the Apple Developer ID Application
-# cert + an App Store Connect API key, then add those secrets. Documented in
-# docs/RELEASING.md, "macOS code signing".
+# cert + an App Store Connect API key, then add those secrets.
 
 # ---------------------------------------------------------------------------
 # Per-OS build dependencies (system libraries needed at build time).

@@ -132,7 +132,7 @@ function disconnectNative() {
   if (nativePort) {
     try {
       nativePort.disconnect();
-    } catch (e) {
+    } catch {
       // best-effort
     }
     nativePort = null;
@@ -292,7 +292,7 @@ async function onCheckGpc(msg) {
     if (resp.ok) {
       body = (await resp.text()).slice(0, 8192);
     }
-  } catch (e) {
+  } catch {
     body = null; // a missing/failed probe is "not advertised", not an error
   }
 

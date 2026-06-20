@@ -59,8 +59,9 @@
 //! receiver VERIFIES (P4 [`verify_pack`](crate::personapack::verify_pack)) before
 //! importing (verify-before-write, fail closed). See
 //! [`Core::mint_and_push_pack`](crate::Core::mint_and_push_pack),
-//! [`Core::receive_pack_frame`](crate::Core::receive_pack_frame), and
-//! `docs/SYNC_PROTOCOL.md`.
+//! [`Core::receive_pack_frame`](crate::Core::receive_pack_frame), and the
+//! LAN-sync wire format and security model in [`crate::sync`] /
+//! [`crate::sync::wire`].
 
 use rand::rngs::StdRng;
 use rand::{RngExt, SeedableRng};

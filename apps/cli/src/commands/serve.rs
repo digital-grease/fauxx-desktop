@@ -419,8 +419,7 @@ impl MqttRuntime {
 fn mqtt_feature_disabled() -> anyhow::Error {
     anyhow::anyhow!(
         "the Home Assistant MQTT bridge was requested but this binary was built without the \
-         `mqtt` feature; rebuild with `cargo build -p fauxx-cli --features mqtt` (see \
-         docs/DEPLOYMENT.md)"
+         `mqtt` feature; rebuild with `cargo build -p fauxx-cli --features mqtt`"
     )
 }
 

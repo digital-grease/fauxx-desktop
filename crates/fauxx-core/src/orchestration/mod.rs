@@ -31,8 +31,9 @@
 //!   cross-device collisions, degrading to local-only when a peer is offline.
 //!
 //! All coordination state travels over the O1 sealed channel (new
-//! [`SyncBody`](crate::sync::SyncBody) variants, documented in
-//! `docs/SYNC_PROTOCOL.md`) and persists in the encrypted store. The engine
+//! [`SyncBody`](crate::sync::SyncBody) variants; the wire format and security
+//! model live in [`crate::sync::wire`] and [`crate::sync`]) and persists in the
+//! encrypted store. The engine
 //! reuses the frozen [`SyntheticPersona`] unit and its 8-to-10-day rotation
 //! window; it never invents a new persona schema or rotation cadence.
 

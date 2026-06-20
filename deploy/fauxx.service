@@ -8,7 +8,7 @@
 #
 # systemd unit for the Fauxx headless homelab mode (C8 #35). Runs the `fauxx
 # serve` long-running loop as a NON-root system user, restarts on failure, and
-# is enabled on boot. Install and enable per docs/DEPLOYMENT.md.
+# is enabled on boot. See the install expectations in the comments below.
 #
 # Expectations:
 #   - the `fauxx-cli` binary is installed at /usr/local/bin/fauxx-cli,

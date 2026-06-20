@@ -988,8 +988,8 @@ impl From<ComparatorArg> for fauxx_core::Comparator {
 /// Arguments for `fauxx-cli serve` (C8 #35, the homelab mode).
 #[derive(Args, Debug)]
 pub struct ServeArgs {
-    /// Override the serve config-file path (default: the per-OS config dir, see
-    /// `docs/DEPLOYMENT.md`). The file is JSON; a missing file uses defaults.
+    /// Override the serve config-file path (default: the per-OS config dir). The
+    /// file is JSON deserialized into `ServeConfig`; a missing file uses defaults.
     #[arg(long, value_name = "PATH", env = "FAUXX_SERVE_CONFIG")]
     pub config: Option<PathBuf>,
 

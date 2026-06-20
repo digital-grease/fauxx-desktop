@@ -33,7 +33,8 @@
 //!   and "unpaired peer is rejected" are unit-tested fully in memory.
 //! - [`discovery`]: the live mDNS implementation of [`Discovery`].
 //!
-//! Security model (see `docs/SYNC_PROTOCOL.md` for the full spec):
+//! Security model (the wire format and full spec live in [`wire`] and the rest
+//! of [`crate::sync`]):
 //! - Confidentiality + authenticity: every payload is sealed with
 //!   `crypto_box_easy` (X25519 + XSalsa20-Poly1305), sender = this device,
 //!   recipient = a paired peer, fresh random nonce per message. Captured

@@ -6,10 +6,9 @@
 # per-OS build-local-artifacts matrix -> build-global-artifacts -> host ->
 # announce) but is hand-maintained here because `dist` is not installed on the
 # build box and `dist-workspace.toml` is allow-dirty = ["ci"]. Re-running
-# `dist generate` after a dist upgrade is the supported way to refresh it; see
-# docs/RELEASING.md.
+# `dist generate` after a dist upgrade is the supported way to refresh it.
 #
-# What it produces (per docs/RELEASING.md):
+# What it produces:
 #   - per-OS archives + installers (shell, powershell) for BOTH binaries
 #     (`fauxx-cli` from apps/cli and `fauxx-desktop` from apps/desktop, gui feature)
 #   - a SHA256 checksum file per artifact
@@ -21,7 +20,7 @@
 # Signing is OPTIONAL and gated on repository secrets. Windows Authenticode
 # (SSL.com eSigner) and macOS Developer ID signing run only when their secrets
 # are present; absent secrets skip signing without failing the release. See the
-# TODO(secrets) notes in dist-workspace.toml and docs/RELEASING.md.
+# TODO(secrets) notes in dist-workspace.toml.
 
 name: Release
 
@@ -147,7 +146,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUILD_MANIFEST_NAME: target/distrib/${{ join(matrix.targets, '-') }}-dist-manifest.json
-      # Reproducibility levers we own (see docs/RELEASING.md). SOURCE_DATE_EPOCH
+      # Reproducibility levers we own. SOURCE_DATE_EPOCH
       # pins embedded timestamps; --remap-path-prefix scrubs the absolute build
       # path so binaries do not encode the runner's checkout directory.
       SOURCE_DATE_EPOCH: "1"
@@ -177,7 +176,7 @@ jobs:
       # Fail closed if Cargo.lock is missing or stale: a current, committed lock
       # is what makes the dependency graph reproducible. `cargo metadata --locked`
       # verifies it WITHOUT modifying it, so the subsequent `dist build` resolves
-      # against exactly the locked versions (docs/RELEASING.md promises --locked).
+      # against exactly the locked versions.
       - name: Verify Cargo.lock is current (locked deps)
         run: cargo metadata --locked --format-version 1 > /dev/null
         shell: bash

@@ -28,7 +28,8 @@
 //! - [`fingerprint`]: the short, human-comparable hash of a public key shown in
 //!   discovery and printed under the QR.
 //!
-//! See `docs/SYNC_PROTOCOL.md` for the full prose specification.
+//! The full LAN-sync wire format and security model live in [`crate::sync`] and
+//! the [`crate::sync::wire`] types below.
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine as _;
@@ -66,8 +67,7 @@ pub const TXT_KEY_PUBKEY: &str = "pk";
 /// `#[non_exhaustive]` so later protocol versions can add kinds, but parsing is
 /// closed: a receiver that does not recognize a `kind` fails to parse and the
 /// frame is rejected (fail closed). Forward compatibility is negotiated through
-/// [`SyncMessage::protocol_version`], not by tolerating unknown kinds. See
-/// `docs/SYNC_PROTOCOL.md` section 7.
+/// [`SyncMessage::protocol_version`], not by tolerating unknown kinds.
 // `Eq` is deliberately NOT derived: the C6 `SignedArtifact` body carries a
 // weight map / query plan with `f64` weights, which are `PartialEq` but not
 // `Eq`. `PartialEq` is all the call sites and tests need (no `SyncBody` ever

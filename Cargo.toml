@@ -105,6 +105,10 @@ directories = "=6.0.0"
 async-trait = "=0.1.89"
 # Temp dirs for store tests (dev-dependency).
 tempfile = "=3.27.0"
+# Property-based testing with shrinking (dev-dependency). Fuzzes the
+# security-critical parsers: the log scrubber, the sealed sync frame, and the
+# harmful-query blocklist, asserting never-panic / never-leak / fail-closed.
+proptest = "=1.11.0"
 # CLI: graceful Ctrl-C shutdown for `agent run`, and hidden passphrase prompt
 # for unlocking the encrypted store on an interactive host (C0 #4, C8 #35).
 ctrlc = "=3.5.2"

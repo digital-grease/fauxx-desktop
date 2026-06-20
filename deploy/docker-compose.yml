@@ -8,7 +8,7 @@
 #
 # Compose example for the Fauxx headless homelab mode (C8 #35). Builds the image
 # from deploy/Dockerfile, runs `fauxx-cli serve` as the non-root container user, and
-# persists the encrypted store + keys in a named volume. See docs/DEPLOYMENT.md.
+# persists the encrypted store + keys in a named volume. See `fauxx-cli serve --help`.
 #
 # Run from the repository root:
 #   docker compose -f deploy/docker-compose.yml up -d --build
