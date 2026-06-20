@@ -134,7 +134,7 @@ pub(crate) const BROWSING_TOPICS_READ_JS: &str = "async () => { \
 /// Robust by design:
 ///
 /// - A top-level `{ "available": bool, "topics": [...] }` object (what
-///   [`BROWSING_TOPICS_READ_JS`] returns) is read directly.
+///   `BROWSING_TOPICS_READ_JS` returns) is read directly.
 /// - A bare top-level array (a raw `document.browsingTopics()` result) is also
 ///   accepted and treated as `available: true`, so the parser round-trips a
 ///   sample API payload too.

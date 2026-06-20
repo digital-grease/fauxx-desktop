@@ -31,9 +31,9 @@
 //! A device behind NAT cannot know its own public IP without SOME external
 //! observation. Rather than bake in a STUN client or a third-party echo
 //! (against the no-backend posture), the source is abstracted behind the
-//! [`PublicIpSource`] trait, mirroring the O1 [`Transport`]/[`Discovery`] seam.
+//! [`PublicIpSource`] trait, mirroring the O1 [`Transport`]/`Discovery` seam.
 //! The default concrete implementation, [`UnknownPublicIp`], reports
-//! [`None`](Option::None) (unknown). Real detection (a STUN probe, or the C7
+//! [`None`] (unknown). Real detection (a STUN probe, or the C7
 //! egress layer which already terminates the connection and thus observes the
 //! public source) plugs in here as another [`PublicIpSource`]; tests inject a
 //! fixed IP with [`FixedPublicIp`]. The core itself makes no network call.

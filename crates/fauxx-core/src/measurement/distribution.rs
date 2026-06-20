@@ -256,7 +256,7 @@ pub fn kl_divergence(
 /// producing `NaN`/`inf`:
 ///
 /// - If BOTH distributions are empty, the result is the zero-drift
-///   [`DriftBreakdown::empty`].
+///   `DriftBreakdown::empty`.
 /// - If only ONE is empty, the non-empty side defines the support; smoothing
 ///   makes the empty side uniform over that support, yielding a finite, positive
 ///   divergence rather than an infinity.

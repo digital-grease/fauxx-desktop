@@ -328,7 +328,7 @@ impl HouseholdOrchestrator {
     }
 
     /// Observe this device's public IP and SHARE it with every paired peer over
-    /// the O1 sealed channel (a [`SyncBody::PublicIpReport`] frame). Returns the
+    /// the O1 sealed channel (a [`SyncBody::PublicIpReport`](crate::sync::SyncBody) frame). Returns the
     /// number of peers it was sent to. The report is peer-to-peer; no third
     /// party sees it. Degrades to a no-op (0 peers) when no peer is reachable.
     pub async fn share_public_ip_with_peers(&self) -> Result<usize> {
@@ -339,9 +339,9 @@ impl HouseholdOrchestrator {
 
     /// Receive a sealed coordination frame from a paired sender, open and verify
     /// it (same enforcement as persona sync: unpaired/forged/tampered frames are
-    /// rejected), and APPLY it: a [`SyncBody::PublicIpReport`] records the
-    /// sender's IP for linkage assessment; a [`SyncBody::CoordinationState`]
-    /// records the asserted assignment; a [`SyncBody::PersonaUpsert`] caches the
+    /// rejected), and APPLY it: a [`SyncBody::PublicIpReport`](crate::sync::SyncBody) records the
+    /// sender's IP for linkage assessment; a [`SyncBody::CoordinationState`](crate::sync::SyncBody)
+    /// records the asserted assignment; a [`SyncBody::PersonaUpsert`](crate::sync::SyncBody) caches the
     /// persona. Returns the kind name applied.
     pub async fn apply_sync_frame(&self, sender_key: &str, frame: &[u8]) -> Result<&'static str> {
         let message = self

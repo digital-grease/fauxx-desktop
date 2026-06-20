@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Real TCP transport for sealed sync frames (C1 #7): the live counterpart to
-//! the in-memory [`FakeLan`](super::transport::testing) double.
+//! the in-memory `FakeLan` double.
 //!
 //! The send side implements [`SealedTransport`]; the inbound accept loop is
 //! driven by the core ([`Core::run_sync_listener`](crate::Core::run_sync_listener)),

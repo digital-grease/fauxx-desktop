@@ -29,7 +29,7 @@
 //!   than three interests, AGE_18_24 + RETIREMENT without FINANCE or REAL_ESTATE,
 //!   PARENTING + AGE_18_24 with a single interest.
 //! - [`Severity::Warning`]: a combination that is unlikely but not impossible,
-//!   driven by the bundled category-affinity prior ([`category_cooccurrence.json`],
+//!   driven by the bundled category-affinity prior (`category_cooccurrence.json`,
 //!   VENDORED from the phone's `ad_category_cooccurrence.json` via
 //!   `scripts/vendor-cooccurrence.py`): a persona-interest PAIR whose affinity is
 //!   BELOW `min_affinity` (an uncommon combination the population sampler would

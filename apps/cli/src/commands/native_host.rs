@@ -131,7 +131,7 @@ pub async fn serve<R: Read, W: Write>(
 /// use the host platform's native byte order for the prefix (not network order),
 /// so we encode/decode with [`u32::to_ne_bytes`] / [`u32::from_ne_bytes`].
 ///
-/// A hard [`MAX_MESSAGE_LEN`] guard rejects an oversized frame BEFORE allocating
+/// A hard [`codec::MAX_MESSAGE_LEN`] guard rejects an oversized frame BEFORE allocating
 /// a buffer for it, so a hostile or buggy peer cannot drive an unbounded
 /// allocation; the codec fails closed instead.
 pub mod codec {

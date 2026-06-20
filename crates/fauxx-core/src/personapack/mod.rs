@@ -17,7 +17,7 @@
 //! Signed persona packs (C5 #27 P4): the import/export library format.
 //!
 //! A persona pack is a versioned, serializable bundle that carries one or more
-//! [`SyntheticPersona`](crate::persona::SyntheticPersona) records (the
+//! [`SyntheticPersona`] records (the
 //! E7-aligned, Android-shaped wire model, so a pack round-trips to the phone),
 //! a [`PackProvenance`] record (the source distribution label, the generation
 //! seed, and the created-at time), the signer's ed25519 PUBLIC key (base64), and

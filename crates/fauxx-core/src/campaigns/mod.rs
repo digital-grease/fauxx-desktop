@@ -35,7 +35,7 @@
 //! ## Closed loop
 //!
 //! Each tick the planner reads the current metric for the target segment from a
-//! [`MetricSource`] (the live source is the C4 [`MeasurementEngine`]; tests
+//! [`MetricSource`] (the live source is the C4 `MeasurementEngine`; tests
 //! inject a [`StubMetricSource`]), then [`Campaign::tick`]:
 //!
 //! 1. computes the signed [`gap`](CampaignProgress::gap) to the threshold,

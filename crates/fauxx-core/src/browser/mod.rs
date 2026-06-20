@@ -142,7 +142,7 @@ pub struct BrowserLaunchConfig {
     gpc_enabled: bool,
     /// The per-persona network config (C7 #30 N1 / #31 N2): the egress
     /// (`--proxy-server`) and DNS strategy (secure-DNS flags) applied to THIS
-    /// isolated decoy profile. Default [`PersonaNetwork::default`] is Direct
+    /// isolated decoy profile. Default [`crate::network::PersonaNetwork::default`] is Direct
     /// egress + SystemDefault DNS, so the standard launch is unchanged. The
     /// emitted args ride alongside the existing flags at launch.
     network: crate::network::PersonaNetwork,
@@ -797,7 +797,7 @@ impl DecoyPage {
     /// Read the decoy profile's own assigned Privacy Sandbox Topics from THIS
     /// page (R2, the closed loop).
     ///
-    /// This is a GUARDED read: it evaluates [`topics::BROWSING_TOPICS_READ_JS`]
+    /// This is a GUARDED read: it evaluates `topics::BROWSING_TOPICS_READ_JS`
     /// (an async function the CDP layer awaits) in the current page context and
     /// parses the result into a typed [`TopicsReadback`]. It does NOT navigate,
     /// so it cannot bypass the R3 navigation blocklist; the caller must first

@@ -180,7 +180,7 @@ pub struct Config {
     /// Optional idle/lock gating policy (C8 #32). `None` (the default) means
     /// NO gating: campaign-driven intensity is used as-is, so a dedicated headless
     /// box runs at full rate. `Some(policy)` attaches the dep-free
-    /// [`ConservativeIdleSource`](idle::ConservativeIdleSource) with that policy,
+    /// [`ConservativeIdleSource`] with that policy,
     /// so decoy intensity pauses/throttles while the machine reports Active and
     /// scales up once idle past the threshold. A GUI can inject real per-OS
     /// detection instead via [`Core::open_with_idle_planner`].
@@ -440,9 +440,9 @@ impl Core {
         Self::open_inner(config, idle_planner).await
     }
 
-    /// Open the store with an explicitly-built idle [`RatePlanner`](idle::RatePlanner)
+    /// Open the store with an explicitly-built idle [`RatePlanner`]
     /// (C8 #32), bypassing the conservative default. A GUI injects real per-OS
-    /// detection this way; tests inject a [`StubIdleSource`](idle::StubIdleSource)
+    /// detection this way; tests inject a [`StubIdleSource`]
     /// to drive the gating across Active/Idle/Locked through the live core path.
     pub async fn open_with_idle_planner(
         config: Config,
@@ -1179,7 +1179,7 @@ impl Core {
     /// The redaction literals for a scrubbed debug-log export: the local account
     /// identifiers, this device's name, every paired peer's name + host, every
     /// persona's id + name, and each persona's egress proxy host / VPN provider.
-    /// Folded into [`logging::Redactions`](crate::logging::Redactions) so none of
+    /// Folded into [`logging::Redactions`] so none of
     /// these reach a public bug report. Best-effort: a subsystem that errors
     /// contributes nothing rather than failing the export.
     pub async fn redaction_literals(&self) -> Vec<String> {
@@ -2724,7 +2724,7 @@ impl Core {
     /// Mint `count` COHERENT synthetic personas from the bundled PUMS-style SEED
     /// distribution, deterministically seeded by `seed`, WITHOUT persisting or
     /// packing them. Each persona's demographics are drawn JOINTLY from one
-    /// [`DemographicCell`](crate::mint::DemographicCell) (so the age/profession/
+    /// [`DemographicCell`] (so the age/profession/
     /// region co-occur), it carries 3-to-5 interests and the frozen 8-to-10-day
     /// rotation window, and it passes the C5 coherence linter with NO
     /// HardImplausible finding (a flagged draw is re-sampled).

@@ -17,7 +17,7 @@
 //! Desktop-LOCAL Persona Studio editor metadata (C5 #24, P1).
 //!
 //! [`PersonaSettings`] is editor-only state keyed by persona id. It is
-//! DELIBERATELY NOT part of the synced [`SyntheticPersona`] wire model: per-field
+//! DELIBERATELY NOT part of the synced `SyntheticPersona` wire model: per-field
 //! locking and rotation tuning are a desktop authoring concern and must never
 //! pollute the cross-device contract the phone reads. So this lives in its OWN
 //! encrypted-store table (not in the persona JSON), and the persona round-trip to

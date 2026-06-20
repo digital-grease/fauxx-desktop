@@ -199,8 +199,8 @@ impl LanSync {
     /// Attach live transport + discovery seams to a freshly-opened engine,
     /// consuming it. Used by [`Core`](crate::Core) when LAN sync is enabled
     /// (opt-in): the engine opens first (loading the keystore identity), then the
-    /// concrete [`TcpTransport`](crate::sync::tcp::TcpTransport) and
-    /// [`MdnsDiscovery`](crate::sync::discovery::MdnsDiscovery) are bolted on.
+    /// concrete [`TcpTransport`] and
+    /// [`MdnsDiscovery`] are bolted on.
     ///
     /// Errors if the engine has already been shared (cloned), since the identity
     /// cannot be moved out of a shared `Arc`; the core attaches seams before the

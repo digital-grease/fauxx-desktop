@@ -21,7 +21,7 @@
 //! while the SAME persona browsing the same page is reproducible under a fixed
 //! seed (which is what the hermetic tests assert).
 //!
-//! The [`SyntheticPersona`](crate::persona::SyntheticPersona) carries no explicit
+//! The [`SyntheticPersona`] carries no explicit
 //! browsing-style fields yet, so this module derives *plausible defaults* keyed
 //! off the persona id: the id seeds a [`StdRng`], and the cadence is sampled
 //! from that. C5 adds explicit browsing-style fields to the persona; when it

@@ -1,0 +1,47 @@
+# Standalone cargo-fuzz crate (nightly-only). Deliberately NOT a workspace
+# member (see the root Cargo.toml `exclude`): libfuzzer-sys needs `unsafe`, which
+# is forbidden workspace-wide, and these targets only build in the scheduled
+# `fuzz` CI lane. The targets coverage-guided-fuzz the same security-critical
+# parsers the proptest suite property-checks: the log scrubber, the sealed sync
+# frame, and the harmful-query blocklist (never panic, fail closed, never leak).
+[package]
+name = "fauxx-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+fauxx-core = { path = "../crates/fauxx-core" }
+
+# A standalone workspace so the root workspace never pulls this crate (or
+# libfuzzer-sys) into its build/test/deny/doc graph.
+[workspace]
+
+[[bin]]
+name = "scrubber"
+path = "fuzz_targets/scrubber.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sync_frame"
+path = "fuzz_targets/sync_frame.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "blocklist"
+path = "fuzz_targets/blocklist.rs"
+test = false
+doc = false
+bench = false
+
+# A release-ish profile keeps the fuzzers fast without baking in overflow UB.
+[profile.release]
+debug = 1

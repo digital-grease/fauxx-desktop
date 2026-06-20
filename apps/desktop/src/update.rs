@@ -1239,6 +1239,9 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
             *busy = true;
             let to_save = draft.clone();
             app.prefs = to_save.clone();
+            // Re-resolve the cached theme now (the System choice does an OS query
+            // here, once, not per frame) so the window re-themes on Save.
+            app.resolved_theme = app.prefs.theme.to_theme();
             Task::perform(bg::save_prefs(to_save), Message::SettingsSaved)
         }
 

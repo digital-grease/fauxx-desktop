@@ -5,6 +5,11 @@ members = [
     "apps/cli",
     "apps/desktop",
 ]
+# The cargo-fuzz crate is a standalone (nightly-only) crate, deliberately kept
+# out of the workspace: it links libfuzzer-sys (which needs unsafe, forbidden
+# workspace-wide) and only ever builds in the scheduled `fuzz` CI lane. It has
+# its own Cargo.lock and is never part of the normal build/test/deny/doc graph.
+exclude = ["fuzz"]
 
 [workspace.package]
 edition = "2021"
@@ -100,6 +105,10 @@ zeroize = "=1.8.2"
 uuid = { version = "=1.23.3", features = ["v4", "serde"] }
 # Per-OS application data/config directories for the store and config paths.
 directories = "=6.0.0"
+# Detect the OS light/dark preference so the GUI's "System" theme follows it.
+# GUI-only (referenced optional by apps/desktop). Safe API over the per-OS theme
+# query (D-Bus portal on Linux, the registry on Windows, defaults on macOS).
+dark-light = "=1.1.1"
 # Object-safe async traits where the API needs `Box<dyn _>` backends (browser,
 # egress); concrete facades use inherent `async fn` and do not need this.
 async-trait = "=0.1.89"

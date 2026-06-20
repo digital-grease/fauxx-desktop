@@ -259,7 +259,7 @@ const AUTH_FLOW_BLOCKLIST: &[(&str, Option<&str>)] = &[
 ///
 /// Parses the URL's authority and path with a minimal, dependency-free parser
 /// (we only need scheme/host/path, and adding a URL crate is unwarranted) and
-/// matches against [`AUTH_FLOW_BLOCKLIST`]. A URL we cannot parse a host from
+/// matches against `AUTH_FLOW_BLOCKLIST`. A URL we cannot parse a host from
 /// (e.g. `about:blank`, `data:`) is NOT on the blocklist and is allowed; those
 /// are exactly the safe local URLs the live test falls back to.
 pub fn is_blocked_auth_flow(url: &str) -> bool {

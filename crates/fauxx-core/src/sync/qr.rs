@@ -16,7 +16,7 @@
 
 //! Rendering the pairing QR.
 //!
-//! The pairing QR encodes a [`PairingPayload`](super::wire::PairingPayload)
+//! The pairing QR encodes a [`PairingPayload`]
 //! string (base64url of a small JSON struct). The core renders it to text so
 //! both clients can display it without pulling a windowing or image dependency
 //! into the headless core: a unicode block form for terminals (the CLI prints

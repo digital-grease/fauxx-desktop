@@ -34,7 +34,7 @@
 //! - [`FACTORS`] = `[0.4, 0.6, 0.8, 1.25, 1.7, 2.5]`, the multiplicative trial
 //!   steps tried on each category, in order.
 //! - [`EPS`] = `1e-6`, the numeric floor used to keep logs/divisions finite.
-//! - The [`SensitiveAttributes`] denylist categories are NEVER perturbed by the
+//! - The `SensitiveAttributes` denylist categories are NEVER perturbed by the
 //!   descent. The final uniform Pass-2 rescale preserves their pairwise ratios
 //!   (their share among themselves holds whenever each one's normalized share is
 //!   at or above [`MIN_WEIGHT`], the realistic case), so a sensitive topic the
@@ -248,7 +248,7 @@ impl WeightNormalizer {
 /// FAITHFUL port of the on-phone `AdversarialAllocator.allocate`:
 /// - coordinate descent for [`PASSES`] sweeps;
 /// - on each perturbable category, try each [`FACTORS`] step and take the first
-///   one that strictly lowers the [`loss`] surrogate AND keeps the candidate's
+///   one that strictly lowers the `loss` surrogate AND keeps the candidate's
 ///   [`kl_divergence`] from the baseline within `kl_budget`;
 /// - NEVER perturb a [`SENSITIVE_ATTRIBUTES`] category (their relative mass is
 ///   preserved exactly);

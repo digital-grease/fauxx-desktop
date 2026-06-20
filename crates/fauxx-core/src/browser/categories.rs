@@ -29,9 +29,11 @@
 //! homepages per category, all plain HTTPS, none requiring auth and none on the
 //! R3 sign-in blocklist (a unit test enforces both invariants).
 //!
-//! All visits go through the guarded [`DecoyPage::navigate`], so the R3
+//! All visits go through the guarded
+//! [`DecoyPage::navigate`](crate::browser::DecoyPage::navigate), so the R3
 //! navigation blocklist applies to every seeded URL, and the persona-paced
-//! [`BrowsingCadence`] gives each visit a human-plausible dwell/scroll.
+//! [`BrowsingCadence`](crate::browser::BrowsingCadence) gives each visit a
+//! human-plausible dwell/scroll.
 
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
@@ -147,7 +149,8 @@ impl SeedOutcome {
 /// Drive `browser` to visit `urls` in order with the persona's paced cadence,
 /// building real history in the decoy profile.
 ///
-/// Every URL goes through the guarded [`DecoyPage::navigate`] (so the R3
+/// Every URL goes through the guarded
+/// [`DecoyPage::navigate`](crate::browser::DecoyPage::navigate) (so the R3
 /// navigation blocklist applies) and then a persona-paced
 /// [`BrowsingCadence`](crate::browser::BrowsingCadence) browse (scroll + dwell).
 /// A URL that fails to load, or is refused by the guardrail, is recorded in

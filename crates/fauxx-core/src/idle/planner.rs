@@ -173,7 +173,7 @@ impl RatePlanner {
         Self { source, config }
     }
 
-    /// Build a planner with the dep-free [`ConservativeIdleSource`] and the
+    /// Build a planner with the dep-free [`ConservativeIdleSource`](super::ConservativeIdleSource) and the
     /// default policy (the always-on default until real detection is wired).
     pub fn conservative() -> Self {
         Self::new(

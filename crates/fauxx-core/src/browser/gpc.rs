@@ -25,7 +25,7 @@
 //! default-ON, applied ONLY to the isolated decoy profile (R3) and never a real
 //! authenticated session.
 //!
-//! [`NAVIGATOR_GPC_INJECT_JS`] is the exact script injected (before page scripts
+//! `NAVIGATOR_GPC_INJECT_JS` is the exact script injected (before page scripts
 //! run) to set the navigator property; the request header is set over CDP. They
 //! live here so the GPC contract is reviewable in one place.
 //!

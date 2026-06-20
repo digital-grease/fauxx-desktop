@@ -30,7 +30,7 @@
 //!
 //! [`MqttBridge`] is an `#[async_trait]`, `Send + Sync` trait. [`MockMqtt`]
 //! records (and logs) every publish and ALWAYS compiles. The real
-//! [`RumqttcBridge`](real::RumqttcBridge) lives behind the off-by-default `mqtt`
+//! `RumqttcBridge` lives behind the off-by-default `mqtt`
 //! cargo feature, so the default headless build links no MQTT client. The real
 //! bridge follows the cinder pattern exactly:
 //!
@@ -167,7 +167,7 @@ impl MqttConfig {
 /// The injectable MQTT bridge seam (C8 #36), mirroring cinder's `MqttBridge`.
 ///
 /// [`MockMqtt`] records publishes for tests/disconnected mode; the real
-/// [`RumqttcBridge`](real::RumqttcBridge) publishes over a cloned `AsyncClient`.
+/// `RumqttcBridge` publishes over a cloned `AsyncClient`.
 /// Object-safe (`async_trait`, `Send + Sync`) so callers hold a
 /// `Box<dyn MqttBridge>` without caring which is wired.
 #[async_trait]
@@ -230,7 +230,7 @@ impl MqttBridge for MockMqtt {
 /// Publish every Home Assistant MQTT-discovery sensor config in `discovery`
 /// through `bridge` (C8 #36), so HA auto-creates the entities. Retained by the
 /// bridge so HA re-discovers after a restart. Generic over the [`MqttBridge`]
-/// seam, so the real [`RumqttcBridge`](real::RumqttcBridge) publishes to a broker
+/// seam, so the real `RumqttcBridge` publishes to a broker
 /// while tests assert the payloads via [`MockMqtt`]. A serialize failure for one
 /// sensor warns and is skipped (never crashes the always-on core).
 pub async fn publish_discovery(bridge: &dyn MqttBridge, discovery: &DiscoveryConfig) {

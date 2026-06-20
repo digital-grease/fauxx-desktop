@@ -22,14 +22,14 @@
 //! Each query string is produced + safety-gated by
 //! [`crate::querybank::QueryGenerator`] BEFORE it reaches here; this module only
 //! builds a SERP URL and navigates to it through the SAME guarded path as every
-//! other decoy visit ([`DecoyPage::navigate`] -> the R3 auth-flow blocklist +
+//! other decoy visit (`DecoyPage::navigate` -> the R3 auth-flow blocklist +
 //! HTTPS-only check), then dwells with the persona's cadence. A search is, by
 //! construction, a GET to a public SERP with credentials omitted; no form is
 //! submitted and no real account is touched.
 //!
 //! US/English only today (the SERP locale params are hardcoded to `en`/`US`),
 //! matching the desktop persona model. Each category runs an intent-chain session:
-//! a goal query followed by `0..=`[`MAX_SESSION_REFINEMENTS`] in-topic refinements
+//! a goal query followed by `0..=MAX_SESSION_REFINEMENTS` in-topic refinements
 //! on the same engine. Still deferred: organic SERP-link following.
 
 use rand::rngs::StdRng;
@@ -190,7 +190,7 @@ async fn dispatch_one(
 
 /// Run a decoy search session for `persona` over the given `categories`. For each
 /// category: generate a safe goal query, pick ONE engine, navigate the goal SERP
-/// through the guarded path, then issue `0..=`[`MAX_SESSION_REFINEMENTS`] in-topic
+/// through the guarded path, then issue `0..=MAX_SESSION_REFINEMENTS` in-topic
 /// refinements on the SAME engine (an intent-chain session, like a human narrowing
 /// on one search tab) - C6 H1 phase 2.
 ///

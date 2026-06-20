@@ -49,9 +49,9 @@
 //!
 //! Proxy CREDENTIALS (username/password) NEVER touch the database and are never
 //! logged. The persisted [`Egress`] row carries only a boolean
-//! [`ProxyAuth::has_credentials`] marker plus a stable account label; the secret
+//! `ProxyAuth::has_credentials` marker plus a stable account label; the secret
 //! username/password live in the OS keystore (see
-//! [`crate::store::keystore`] proxy-credential helpers), exactly like the DB and
+//! `crate::store::keystore` proxy-credential helpers), exactly like the DB and
 //! pairing keys.
 //!
 //! ## Observer trade-off (explicit, N2)

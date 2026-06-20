@@ -155,6 +155,21 @@ jobs:
       - uses: actions/checkout@v4
       - run: ./ci/check-invariants.sh
 
+  docs:
+    name: cargo doc (no broken intra-doc links)
+    runs-on: ubuntu-24.04
+    env:
+      # Promote every rustdoc lint (chiefly broken/private intra-doc links) to an
+      # error so a doc reference that no longer resolves fails CI.
+      RUSTDOCFLAGS: "-D warnings"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.96.0"
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo doc --workspace --no-deps
+
   live-gpc:
     name: live GPC (Chromium decoy emit + honoring detection, C3 #18)
     runs-on: ubuntu-24.04
@@ -283,6 +298,38 @@ jobs:
           path: mutants.out/
           if-no-files-found: ignore
 
+  fuzz:
+    name: cargo-fuzz (scheduled)
+    # Coverage-guided fuzzing of the security-critical parsers (scrubber, sealed
+    # sync frame, harmful-query blocklist). Nightly + libfuzzer, so it runs only
+    # on the weekly schedule or a manual dispatch, never on every push/PR. A
+    # crash fails the lane (a real bug); a clean smoke run passes. The fuzz crate
+    # is the standalone `fuzz/` package (excluded from the workspace).
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - name: install cargo-fuzz
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - name: smoke-fuzz each target
+        run: |
+          for target in scrubber sync_frame blocklist; do
+            echo "::group::fuzz $target"
+            cargo +nightly fuzz run "$target" -- -max_total_time=120 -rss_limit_mb=4096
+            echo "::endgroup::"
+          done
+      - name: upload any crash corpus
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts
+          path: fuzz/artifacts/
+          if-no-files-found: ignore
+
   all-green:
     name: all green (required check)
     # The single status check to require in branch protection: it passes only if
@@ -300,6 +347,7 @@ jobs:
       - gui
       - deny
       - invariants
+      - docs
       - golden-vectors
       - extension-js
     runs-on: ubuntu-24.04

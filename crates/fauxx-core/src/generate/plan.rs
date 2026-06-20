@@ -28,7 +28,7 @@
 //! - CATEGORY SELECTION: the persona-following weight BLEND from
 //!   [`crate::constants`] (the Android `computeWeights`: each category's weight is
 //!   `0.85 * w + 0.15 * 0.6`, with `w = 2.0` for an interest else `0.3`), BIASED
-//!   by the signed [`WeightMap`](super::allocator::WeightMap) from the
+//!   by the signed [`WeightMap`] from the
 //!   adversarial allocator (the plan multiplies the persona blend by the weight
 //!   map so the allocator's protected-interest emphasis carries into the plan).
 //!
@@ -68,7 +68,7 @@ use crate::persona::{CategoryPool, SyntheticPersona};
 /// OPTIONAL generated query string.
 ///
 /// `query` is `None` here (desktop emits the category target; the phone expands
-/// it with its own [E6] generator). The field exists so a future desktop-side
+/// it with its own `E6` generator). The field exists so a future desktop-side
 /// `GrammarQueryGenerator` port can fill it in without a schema change; it is
 /// omitted from JSON when `None` so the phone's lenient reader never sees a key
 /// it does not know.

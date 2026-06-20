@@ -28,9 +28,9 @@
 //! the desktop never emits a query the phone would refuse. US/English only by
 //! design, matching the desktop's ACS-PUMS persona model.
 //!
-//! Each goal query is a head plus an optional per-install-styled [`refinements`]
+//! Each goal query is a head plus an optional per-install-styled `refinements`
 //! wrap, blocklist-gated. The head is either a raw corpus pick or a NOVEL
-//! [`markov`]-chained query (per-install mix), so a fleet does not share one
+//! `markov`-chained query (per-install mix), so a fleet does not share one
 //! literal-corpus head set. Multi-query refinement CHAIN sessions live in the
 //! caller ([`crate::browser::search`]). Still deferred: organic SERP-link
 //! following (see the plan).
@@ -193,7 +193,7 @@ impl QueryGenerator {
 }
 
 /// Persona commercial lean in `[0, 1]`: the fraction of the persona's interests
-/// that are commercial-intent categories; [`NEUTRAL_LEAN`] when there are none.
+/// that are commercial-intent categories; `NEUTRAL_LEAN` when there are none.
 /// Commercial personas refine slightly more (buy/compare/price intent).
 pub fn commercial_lean(interests: &[CategoryPool]) -> f32 {
     if interests.is_empty() {

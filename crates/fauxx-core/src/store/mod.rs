@@ -121,7 +121,7 @@ pub struct GpcSiteStatus {
 
 /// One row in the `installed_packs` library ledger (C5 #27 P4): a signed
 /// persona pack that was imported into this device. Wraps the
-/// [`PackRecord`](crate::personapack::PackRecord) (provenance, signer key,
+/// [`PackRecord`] (provenance, signer key,
 /// persona ids) the pack carried; the personas themselves live in the
 /// `personas` table. Persisted via [`EncryptedStore::upsert_installed_pack`] and
 /// read back with [`EncryptedStore::list_installed_packs`] /
@@ -375,7 +375,7 @@ impl EncryptedStore {
     // --- topics_measurements (Privacy Sandbox Topics read-back, C2 #12 R2) ---
 
     /// Append a Topics read-back measurement. The parsed
-    /// [`AssignedTopic`](crate::browser::AssignedTopic) list is stored verbatim
+    /// [`AssignedTopic`] list is stored verbatim
     /// as JSON; an empty list (the common epoch-boundary case) is a valid record.
     pub fn insert_topics_measurement(&self, record: &TopicsMeasurement) -> Result<()> {
         let topics_json = serde_json::to_string(&record.topics)?;

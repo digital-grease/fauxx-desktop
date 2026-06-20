@@ -212,7 +212,7 @@ const LINK_BONUS_PER_ACCOUNT: u32 = 4;
 ///    ([`AccountAnchor::intrinsic_strength`]). Strong real identifiers (legal
 ///    name, payment) weigh most.
 /// 2. BREADTH: the number of OTHER accounts that share this anchor's
-///    `shared_contact_key`. Each linked account adds [`LINK_BONUS_PER_ACCOUNT`]
+///    `shared_contact_key`. Each linked account adds `LINK_BONUS_PER_ACCOUNT`
 ///    to the score, because a contact that bridges many accounts links identity
 ///    far more broadly than an isolated one.
 ///

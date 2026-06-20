@@ -38,7 +38,7 @@
 //! - [`RequestKind`]: the four supported letter kinds (GDPR access / erasure,
 //!   CCPA access / deletion) and their legal framing + deadline rule.
 //! - [`Controller`]: the target data controller, either a known broker (reusing
-//!   the [`crate::brokers`] registry) or an arbitrary name + contact.
+//!   the [`mod@crate::brokers`] registry) or an arbitrary name + contact.
 //! - [`letter`]: pure letter rendering from templates filled with persona /
 //!   subject details and the controller.
 //! - [`DsarRequest`]: the persisted lifecycle record (drafted, sent,
@@ -213,13 +213,13 @@ fn days_in_month(year: i32, month: Month) -> u8 {
 
 /// The target data controller a DSAR letter is addressed to.
 ///
-/// Either a KNOWN broker (reusing the [`crate::brokers`] registry, so the
+/// Either a KNOWN broker (reusing the [`mod@crate::brokers`] registry, so the
 /// display name and a contact are pulled from the bundled template) or an
 /// ARBITRARY controller the user names with their own contact string.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Controller {
-    /// The broker id this controller corresponds to in the [`crate::brokers`]
+    /// The broker id this controller corresponds to in the [`mod@crate::brokers`]
     /// registry, or `None` for an arbitrary controller.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub broker_id: Option<String>,

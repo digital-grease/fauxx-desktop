@@ -36,8 +36,13 @@ pub struct App {
     /// The GUI-local desktop settings (theme, auto-refresh cadence, close-to-tray,
     /// and the device/sync prefs applied at the next start). Loaded once at
     /// construction; the Settings screen edits a draft and writes it back here on
-    /// Save. Drives [`App::theme`] and the subscription tick cadence.
+    /// Save. Drives the subscription tick cadence and close-to-tray behavior.
     pub prefs: DesktopSettings,
+    /// The concrete iced theme, resolved from [`Self::prefs`]`.theme` once at
+    /// construction (and recomputed on Save). Cached because resolving the
+    /// `System` choice does an OS theme query (a D-Bus call on Linux) that must
+    /// not run on every frame; [`App::theme`] just clones this.
+    pub resolved_theme: iced::Theme,
     /// The current finite state.
     pub state: AppState,
     /// Non-fatal error banner shown above the body. Distinct from
@@ -249,19 +254,25 @@ impl App {
     /// settings up front so the theme and tick cadence apply from the first
     /// frame (a missing or malformed file falls back to defaults).
     pub fn new(core: Core, tray: Option<TrayHandle>) -> Self {
+        let prefs = crate::prefs::load();
+        // Resolve the theme once here (System does an OS query); cached so
+        // `theme()` stays a cheap per-frame clone.
+        let resolved_theme = prefs.theme.to_theme();
         Self {
             core,
-            prefs: crate::prefs::load(),
+            prefs,
+            resolved_theme,
             state: AppState::Loading,
             error_banner: None,
             tray,
         }
     }
 
-    /// The active iced theme, derived from the user's saved theme choice. Passed
-    /// to iced via `.theme(App::theme)`.
+    /// The active iced theme. Returns the cached resolved theme; passed to iced
+    /// via `.theme(App::theme)` and re-read every frame, so it must stay cheap
+    /// (the `System` OS query is done once at construction and on Save, not here).
     pub fn theme(&self) -> iced::Theme {
-        self.prefs.theme.to_theme()
+        self.resolved_theme.clone()
     }
 
     /// Window title. A `&App -> String` fn, as iced's `.title()` expects.

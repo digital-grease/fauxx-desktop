@@ -105,7 +105,7 @@ pub enum SyncBody {
     /// Deliver a SIGNED generated artifact (C6 #28, H1): the desktop-generated
     /// weight map or query plan the phone replays. The `kind` tag is
     /// `"SignedArtifact"`. The body is a self-contained
-    /// [`SignedArtifact`](crate::generate::SignedArtifact) carrying its own
+    /// [`SignedArtifact`] carrying its own
     /// ed25519 signature, signer public key, and freshness/expiry timestamps; the
     /// receiver VERIFIES the signature and freshness before use and FALLS BACK to
     /// on-device generation when no fresh, valid artifact is present. The sealed
@@ -115,7 +115,7 @@ pub enum SyncBody {
     SignedArtifact(SignedArtifact),
 
     /// Distribute a SIGNED persona pack (C6 #29, H2): the desktop-minted
-    /// (PUMS-microdata) personas bundled into a [`PersonaPack`] the phone imports.
+    /// (PUMS-microdata) personas bundled into a `PersonaPack` the phone imports.
     /// The `kind` tag is `"PersonaPack"`. The body carries the pack's JSON bytes as
     /// a STANDARD-base64 string (the same import/export byte form, so the wire kind
     /// is decoupled from the pack's internal serde shape and stays stable as the

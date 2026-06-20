@@ -18,8 +18,8 @@
 //! #26 P3 week simulator).
 //!
 //! This is the HEADLESS core of the studio: the editable persona model metadata
-//! ([`settings`]), the coherence linter ([`linter`]), and the deterministic week
-//! simulator ([`simulator`]). The Iced GUI views are a SEPARATE later batch; no
+//! (`settings`), the coherence linter (`linter`), and the deterministic week
+//! simulator (`simulator`). The Iced GUI views are a SEPARATE later batch; no
 //! GUI/CLI type appears here. Everything is 100% local with no network or
 //! telemetry.
 //!

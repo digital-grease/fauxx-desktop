@@ -18,7 +18,8 @@
 //!
 //! Home Assistant publishes a JSON command to the configured command topic to
 //! start, pause, or adjust a campaign; this module parses it into a typed
-//! [`CampaignCommand`] and [`apply`]s it to the U2 [`CampaignPlanner`].
+//! [`CampaignCommand`] and [`apply`](CampaignCommand::apply)s it to the U2
+//! [`CampaignPlanner`].
 //!
 //! The JSON shape (HA automations publish this) is an internally-tagged action:
 //!

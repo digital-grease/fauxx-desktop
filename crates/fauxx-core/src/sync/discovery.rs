@@ -16,9 +16,9 @@
 
 //! Concrete mDNS discovery (the real LAN wiring).
 //!
-//! This is the live counterpart to the [`Discovery`](super::transport::Discovery)
+//! This is the live counterpart to the [`Discovery`]
 //! trait, backed by `mdns-sd`. It advertises this device under the
-//! [`SERVICE_TYPE`](super::wire::SERVICE_TYPE) with a TXT record carrying the
+//! [`SERVICE_TYPE`] with a TXT record carrying the
 //! protocol version, the public-key fingerprint, and the full base64url public
 //! key, and it browses for the same service type, draining resolved peers into
 //! a shared snapshot.

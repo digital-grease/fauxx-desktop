@@ -39,14 +39,16 @@ const APP_QUALIFIER: &str = "com";
 const APP_ORGANIZATION: &str = "DigitalGrease";
 const APP_NAME: &str = "fauxx";
 
-/// The window theme the user picked. `Light` is the default (matches the look
-/// the app shipped with). System-theme detection needs an extra per-OS
-/// dependency and is a follow-up, so only the two explicit choices exist today.
+/// The window theme the user picked. `System` (the default) follows the OS
+/// light/dark setting; `Light` and `Dark` pin a fixed palette.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ThemeChoice {
-    /// The light palette (default).
+    /// Follow the operating system's light/dark setting (default). Resolved via
+    /// the OS theme query once at startup (and on Save), never per frame.
     #[default]
+    System,
+    /// The light palette.
     Light,
     /// The dark palette.
     Dark,
@@ -56,19 +58,29 @@ impl ThemeChoice {
     /// The short display label for the picker.
     pub fn label(self) -> &'static str {
         match self {
+            ThemeChoice::System => "System",
             ThemeChoice::Light => "Light",
             ThemeChoice::Dark => "Dark",
         }
     }
 
     /// All choices in display order, for rendering the picker.
-    pub fn all() -> [ThemeChoice; 2] {
-        [ThemeChoice::Light, ThemeChoice::Dark]
+    pub fn all() -> [ThemeChoice; 3] {
+        [ThemeChoice::System, ThemeChoice::Light, ThemeChoice::Dark]
     }
 
-    /// Map to the concrete iced theme the application renders with.
+    /// Map to the concrete iced theme the application renders with. For
+    /// [`ThemeChoice::System`] this performs the OS theme query
+    /// ([`dark_light::detect`]), which on Linux is a D-Bus call, so callers MUST
+    /// resolve this once (at startup and on Save) and cache the result rather
+    /// than calling it every frame. An undetectable OS preference falls back to
+    /// Light.
     pub fn to_theme(self) -> iced::Theme {
         match self {
+            ThemeChoice::System => match dark_light::detect() {
+                dark_light::Mode::Dark => iced::Theme::Dark,
+                dark_light::Mode::Light | dark_light::Mode::Default => iced::Theme::Light,
+            },
             ThemeChoice::Light => iced::Theme::Light,
             ThemeChoice::Dark => iced::Theme::Dark,
         }
@@ -108,11 +120,11 @@ pub struct DesktopSettings {
 
 impl Default for DesktopSettings {
     fn default() -> Self {
-        // These defaults reproduce the behavior the app shipped with before the
-        // Settings screen existed: light theme, a 2s tick, close-to-tray on, and
-        // LAN sync enabled with the core-derived device name and default port.
+        // The behavior the app shipped with, except the theme now follows the OS
+        // by default (System): a 2s tick, close-to-tray on, and LAN sync enabled
+        // with the core-derived device name and default port.
         Self {
-            theme: ThemeChoice::Light,
+            theme: ThemeChoice::System,
             auto_refresh_secs: 2,
             close_to_tray: true,
             device_name: None,
@@ -191,7 +203,7 @@ mod tests {
     #[test]
     fn defaults_reproduce_prior_behavior() {
         let d = DesktopSettings::default();
-        assert_eq!(d.theme, ThemeChoice::Light);
+        assert_eq!(d.theme, ThemeChoice::System);
         assert_eq!(d.auto_refresh_secs, 2);
         assert!(d.close_to_tray);
         assert!(d.lan_sync);

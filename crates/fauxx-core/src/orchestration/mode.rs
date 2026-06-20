@@ -20,7 +20,8 @@
 //!
 //! - [`CoordinationMode::CoherentHousehold`]: every paired device presents the
 //!   SAME persona, advancing together at the phone's frozen 8-to-10-day cadence
-//!   ([`SyntheticPersona::active_until`]). One elected persona is propagated to
+//!   ([`active_until`](crate::persona::SyntheticPersona::active_until)). One
+//!   elected persona is propagated to
 //!   all devices over the O1 sealed channel; on rotation, all devices advance
 //!   in lockstep. This models one person whose devices share an identity.
 //! - [`CoordinationMode::Fragmentation`]: each paired device is assigned a
@@ -96,7 +97,7 @@ impl std::fmt::Display for CoordinationMode {
 /// client can render which device presents which persona.
 ///
 /// `device_key` is the base64url public key of a paired peer, or empty for this
-/// device itself (see [`SELF_DEVICE_KEY`]). `is_self` flags the local device so
+/// device itself (see `SELF_DEVICE_KEY`). `is_self` flags the local device so
 /// a client does not have to know the empty-key convention.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

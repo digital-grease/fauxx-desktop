@@ -13,6 +13,11 @@ target
 # Contains mutation testing data
 **/mutants.out*/
 
+# cargo-fuzz runtime data (the fuzz/ crate's own target/ is covered by `target`
+# above). The corpus and crash artifacts are generated, not source.
+/fuzz/corpus/
+/fuzz/artifacts/
+
 # RustRover
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore

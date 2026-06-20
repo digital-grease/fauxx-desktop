@@ -29,7 +29,8 @@
 //!    ed25519 sign/verify primitives (the same `PackSigningKey` pattern as
 //!    persona packs) and a freshness/expiry the consumer checks.
 //!
-//! Both artifacts ride the sealed channel as the [`SyncBody::SignedArtifact`]
+//! Both artifacts ride the sealed channel as the
+//! [`crate::sync::wire::SyncBody::SignedArtifact`]
 //! wire kind; see [`crate::sync::wire`] for the wire format and [`crate::sync`]
 //! for the security model.
 //!

@@ -42,6 +42,7 @@ gui = [
     "dep:uuid",
     "dep:serde",
     "dep:serde_json",
+    "dep:dark-light",
 ]
 
 [dependencies]
@@ -72,6 +73,9 @@ uuid = { workspace = true, optional = true }
 # windowing crates, not serde).
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
+# Detect the OS light/dark setting for the "System" theme choice. Safe API; the
+# result is resolved once at startup (and on Save), never per frame.
+dark-light = { workspace = true, optional = true }
 
 # Per-OS system-tray backend, both activated by the `gui` feature. Splitting
 # these into target tables keeps the Linux build off tray-icon's archived gtk-rs
