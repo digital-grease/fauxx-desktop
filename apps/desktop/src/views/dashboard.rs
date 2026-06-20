@@ -139,7 +139,7 @@ fn device_picker(snapshot: &DashboardSnapshot) -> Element<'_, Message> {
     )
     .padding(12)
     .width(Length::Fill)
-    .style(panel_style)
+    .style(crate::style::panel)
     .into()
 }
 
@@ -175,7 +175,7 @@ fn empty_state() -> Element<'static, Message> {
         .size(12),
     ]
     .spacing(8);
-    container(col).padding(12).style(panel_style).into()
+    container(col).padding(12).style(crate::style::panel).into()
 }
 
 /// A one-line summary: which persona, how many devices fed the aggregate, and
@@ -205,7 +205,7 @@ fn summary_strip(snapshot: &DashboardSnapshot) -> Element<'_, Message> {
     container(col)
         .padding(12)
         .width(Length::Fill)
-        .style(panel_style)
+        .style(crate::style::panel)
         .into()
 }
 
@@ -234,7 +234,7 @@ fn timeline_panel(snapshot: &DashboardSnapshot) -> Element<'_, Message> {
     container(column![text("Drift over time (KL divergence)").size(14), chart].spacing(8))
         .padding(12)
         .width(Length::Fill)
-        .style(panel_style)
+        .style(crate::style::panel)
         .into()
 }
 
@@ -266,7 +266,7 @@ fn platform_selector(
     container(buttons)
         .padding(8)
         .width(Length::Fill)
-        .style(panel_style)
+        .style(crate::style::panel)
         .into()
 }
 
@@ -300,7 +300,7 @@ fn heatmap_panel(snapshot: &DashboardSnapshot, selected_platform: usize) -> Elem
     )
     .padding(12)
     .width(Length::Fill)
-    .style(panel_style)
+    .style(crate::style::panel)
     .into()
 }
 
@@ -331,17 +331,4 @@ fn heatmap_rows(series: &HeatmapSeries) -> (Vec<HeatmapRow>, usize) {
         .collect();
 
     (rows, columns)
-}
-
-fn panel_style(_theme: &iced::Theme) -> container::Style {
-    container::Style {
-        background: Some(iced::Color::from_rgba8(0xf6, 0xf6, 0xf8, 1.0).into()),
-        text_color: Some(iced::Color::from_rgba8(0x1a, 0x1a, 0x1f, 1.0)),
-        border: iced::Border {
-            color: iced::Color::from_rgba8(0xdd, 0xdd, 0xe0, 1.0),
-            width: 1.0,
-            radius: 6.0.into(),
-        },
-        ..container::Style::default()
-    }
 }

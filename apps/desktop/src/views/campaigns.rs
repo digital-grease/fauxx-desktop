@@ -28,7 +28,7 @@ use fauxx_core::{Campaign, CampaignStatus, Comparator};
 use iced::widget::{
     button, column, container, pick_list, row, scrollable, text, text_input, Space,
 };
-use iced::{Color, Element, Length};
+use iced::{Color, Element, Length, Theme};
 
 use crate::message::{CampaignDraft, CampaignsSnapshot, Message};
 
@@ -97,7 +97,7 @@ fn list_column<'a>(campaigns: &'a [Campaign], busy: bool) -> Element<'a, Message
     container(col)
         .padding(12)
         .width(Length::Fill)
-        .style(panel_style)
+        .style(crate::style::panel)
         .into()
 }
 
@@ -139,13 +139,18 @@ fn campaign_card<'a>(campaign: &'a Campaign, busy: bool) -> Element<'a, Message>
             .padding(6)
             .style(button::primary)
             .into(),
-        CampaignStatus::Achieved => text("achieved").size(11).color(status_color).into(),
+        CampaignStatus::Achieved => text("achieved")
+            .size(11)
+            .style(move |t| crate::style::text_in(status_color(t)))
+            .into(),
     };
 
     let header = row![
         text(campaign.label.clone()).size(14),
         Space::new().width(Length::Fill),
-        text(status_label).size(11).color(status_color),
+        text(status_label)
+            .size(11)
+            .style(move |t| crate::style::text_in(status_color(t))),
         control,
     ]
     .spacing(8)
@@ -170,7 +175,7 @@ fn campaign_card<'a>(campaign: &'a Campaign, busy: bool) -> Element<'a, Message>
     container(column![header, detail].spacing(6))
         .padding(10)
         .width(Length::Fill)
-        .style(card_style)
+        .style(crate::style::panel_strong)
         .into()
 }
 
@@ -266,7 +271,7 @@ fn create_form<'a>(
     container(col)
         .padding(12)
         .width(Length::Fill)
-        .style(panel_style)
+        .style(crate::style::panel)
         .into()
 }
 
@@ -321,37 +326,14 @@ impl std::fmt::Display for ComparatorChoice {
     }
 }
 
-fn status_style(status: CampaignStatus) -> (&'static str, Color) {
+/// The status label plus a theme-aware color accessor for it. The color is
+/// derived from the active theme by semantic meaning: planned -> muted,
+/// running -> success, achieved -> accent, paused -> warning.
+fn status_style(status: CampaignStatus) -> (&'static str, fn(&Theme) -> Color) {
     match status {
-        CampaignStatus::Planned => ("PLANNED", Color::from_rgba8(0x55, 0x55, 0x60, 1.0)),
-        CampaignStatus::Running => ("RUNNING", Color::from_rgba8(0x10, 0x6a, 0x30, 1.0)),
-        CampaignStatus::Achieved => ("ACHIEVED", Color::from_rgba8(0x16, 0x50, 0x8a, 1.0)),
-        CampaignStatus::Paused => ("PAUSED", Color::from_rgba8(0x9a, 0x6a, 0x00, 1.0)),
-    }
-}
-
-fn panel_style(_theme: &iced::Theme) -> container::Style {
-    container::Style {
-        background: Some(iced::Color::from_rgba8(0xf6, 0xf6, 0xf8, 1.0).into()),
-        text_color: Some(iced::Color::from_rgba8(0x1a, 0x1a, 0x1f, 1.0)),
-        border: iced::Border {
-            color: iced::Color::from_rgba8(0xdd, 0xdd, 0xe0, 1.0),
-            width: 1.0,
-            radius: 6.0.into(),
-        },
-        ..container::Style::default()
-    }
-}
-
-fn card_style(_theme: &iced::Theme) -> container::Style {
-    container::Style {
-        background: Some(iced::Color::from_rgba8(0xff, 0xff, 0xff, 1.0).into()),
-        text_color: Some(iced::Color::from_rgba8(0x1a, 0x1a, 0x1f, 1.0)),
-        border: iced::Border {
-            color: iced::Color::from_rgba8(0xe5, 0xe5, 0xe8, 1.0),
-            width: 1.0,
-            radius: 4.0.into(),
-        },
-        ..container::Style::default()
+        CampaignStatus::Planned => ("PLANNED", crate::style::muted_color),
+        CampaignStatus::Running => ("RUNNING", crate::style::success_color),
+        CampaignStatus::Achieved => ("ACHIEVED", crate::style::accent_color),
+        CampaignStatus::Paused => ("PAUSED", crate::style::warning_color),
     }
 }

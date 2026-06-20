@@ -33,7 +33,16 @@ path = "src/main.rs"
 # their platform.
 [features]
 default = []
-gui = ["dep:iced", "dep:tray-icon", "dep:ksni", "dep:rfd", "dep:directories", "dep:uuid"]
+gui = [
+    "dep:iced",
+    "dep:tray-icon",
+    "dep:ksni",
+    "dep:rfd",
+    "dep:directories",
+    "dep:uuid",
+    "dep:serde",
+    "dep:serde_json",
+]
 
 [dependencies]
 fauxx-core = { path = "../../crates/fauxx-core" }
@@ -57,6 +66,12 @@ directories = { workspace = true, optional = true }
 # UUID v4 generation for new C8 #33 U2 campaign ids, minted off the GUI thread.
 # GUI-only (the default GUI-free build links none of this).
 uuid = { workspace = true, optional = true }
+# Serialize/deserialize the GUI-local desktop settings file (theme, auto-refresh,
+# device/sync prefs) under the OS config dir. GUI-only and optional, so the
+# default headless build links neither (and the feature-leak guard only bans the
+# windowing crates, not serde).
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 
 # Per-OS system-tray backend, both activated by the `gui` feature. Splitting
 # these into target tables keeps the Linux build off tray-icon's archived gtk-rs

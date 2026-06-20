@@ -49,10 +49,20 @@ use crate::message::{
 pub async fn open_and_load(fallback: Core) -> Result<BootOutcome, String> {
     // The GUI is the cross-device command center (the Devices view shows pairing
     // + discovered peers, and the first-run wizard imports a persona from the
-    // phone), so it opens with live LAN sync enabled (C1 #7): mDNS discovery fills
-    // the peer list and the inbound listener (started after boot via
-    // `Core::spawn_background_lan_sync`) can receive sealed personas.
-    let core = match Core::open(Config::new().with_lan_sync(true)).await {
+    // phone), so it opens with live LAN sync enabled by default (C1 #7): mDNS
+    // discovery fills the peer list and the inbound listener (started after boot
+    // via `Core::spawn_background_lan_sync`) can receive sealed personas. The
+    // Settings screen can override the LAN-sync toggle, device name, and port;
+    // those are GUI-local prefs read here so they take effect at start.
+    let prefs = crate::prefs::load();
+    let mut config = Config::new().with_lan_sync(prefs.lan_sync);
+    if let Some(name) = prefs.device_name_trimmed() {
+        config = config.with_device_name(name);
+    }
+    if let Some(port) = prefs.sync_port {
+        config = config.with_sync_port(port);
+    }
+    let core = match Core::open(config).await {
         Ok(opened) => opened,
         Err(err) => {
             // Not fatal: the window still works against a store-less core.
@@ -79,6 +89,13 @@ pub async fn load(core: Core) -> Result<Snapshot, String> {
     let status = core.status().await.map_err(|e| e.to_string())?;
     let personas = core.list_personas().await.map_err(|e| e.to_string())?;
     Ok(Snapshot { status, personas })
+}
+
+/// Persist the GUI-local desktop settings (the Settings screen Save action).
+/// Wraps the synchronous [`crate::prefs::save`] so it rides the same
+/// `Task::perform` channel as the core calls (the write is a tiny local file).
+pub async fn save_prefs(settings: crate::prefs::DesktopSettings) -> Result<(), String> {
+    crate::prefs::save(&settings)
 }
 
 /// Load the cross-device sync snapshot for the Devices view: the pairing QR and

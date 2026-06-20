@@ -93,7 +93,7 @@ fn loaded<'a>(snapshot: &'a StudioSnapshot, busy: bool) -> Element<'a, Message> 
         )
         .padding(12)
         .width(Length::FillPortion(3))
-        .style(panel_style)
+        .style(crate::style::panel)
         .into(),
     };
 
@@ -158,11 +158,11 @@ fn library_column<'a>(snapshot: &'a StudioSnapshot, busy: bool) -> Element<'a, M
         container(personas)
             .padding(12)
             .width(Length::Fill)
-            .style(panel_style),
+            .style(crate::style::panel),
         container(column![packs, actions].spacing(10))
             .padding(12)
             .width(Length::Fill)
-            .style(panel_style),
+            .style(crate::style::panel),
     ]
     .spacing(12);
 
@@ -261,7 +261,7 @@ fn editor_panel<'a>(detail: &'a PersonaDetail, busy: bool) -> Element<'a, Messag
     container(col)
         .padding(12)
         .width(Length::Fill)
-        .style(panel_style)
+        .style(crate::style::panel)
         .into()
 }
 
@@ -435,17 +435,19 @@ fn interest_editor<'a>(
 ) -> Element<'a, Message> {
     let count = interests.len();
     let in_bounds = (3..=5).contains(&count);
-    let count_color = if in_bounds {
-        iced::Color::from_rgba8(0x1a, 0x6a, 0x1a, 1.0)
-    } else {
-        iced::Color::from_rgba8(0xb0, 0x00, 0x20, 1.0)
-    };
 
     let header = row![
         text("Interests:").size(12).width(Length::Fixed(110.0)),
         text(format!("{count} selected (need 3 to 5)"))
             .size(11)
-            .color(count_color),
+            .style(move |t| {
+                let color = if in_bounds {
+                    crate::style::success_color(t)
+                } else {
+                    crate::style::danger_color(t)
+                };
+                crate::style::text_in(color)
+            }),
         Space::new().width(Length::Fill),
         lock_checkbox(PersonaField::Interests, settings, busy),
     ]
@@ -608,7 +610,7 @@ fn rotation_panel(settings: &PersonaSettings, busy: bool) -> Element<'static, Me
     )
     .padding(12)
     .width(Length::Fill)
-    .style(panel_style)
+    .style(crate::style::panel)
     .into()
 }
 
@@ -619,18 +621,24 @@ fn linter_panel(findings: &[Finding]) -> Element<'_, Message> {
         col = col.push(text("No coherence issues found.").size(12));
     } else {
         for finding in findings {
-            let (tag, color) = match finding.severity {
-                Severity::HardImplausible => (
-                    "IMPLAUSIBLE",
-                    iced::Color::from_rgba8(0xb0, 0x00, 0x20, 1.0),
-                ),
-                Severity::Warning => ("WARNING", iced::Color::from_rgba8(0x9a, 0x6a, 0x00, 1.0)),
+            let tag = match finding.severity {
+                Severity::HardImplausible => "IMPLAUSIBLE",
+                Severity::Warning => "WARNING",
                 // Severity is #[non_exhaustive]; render any future tier plainly.
-                _ => ("NOTE", iced::Color::from_rgba8(0x33, 0x33, 0x33, 1.0)),
+                _ => "NOTE",
+            };
+            let tag_style = move |t: &iced::Theme| {
+                let color = match finding.severity {
+                    Severity::HardImplausible => crate::style::danger_color(t),
+                    Severity::Warning => crate::style::warning_color(t),
+                    // Severity is #[non_exhaustive]; render any future tier plainly.
+                    _ => crate::style::text_color(t),
+                };
+                crate::style::text_in(color)
             };
             col = col.push(
                 column![
-                    text(tag).size(11).color(color),
+                    text(tag).size(11).style(tag_style),
                     text(finding.reason.clone()).size(12),
                     text(format!("fields: {}", finding.fields.join(", "))).size(10),
                 ]
@@ -642,7 +650,7 @@ fn linter_panel(findings: &[Finding]) -> Element<'_, Message> {
     container(col)
         .padding(12)
         .width(Length::Fill)
-        .style(panel_style)
+        .style(crate::style::panel)
         .into()
 }
 
@@ -698,7 +706,7 @@ fn simulator_panel(week: &SimulatedWeek, seed: u64, busy: bool) -> Element<'_, M
     container(column![header, chart, breakdown].spacing(8))
         .padding(12)
         .width(Length::Fill)
-        .style(panel_style)
+        .style(crate::style::panel)
         .into()
 }
 
@@ -706,17 +714,4 @@ fn simulator_panel(week: &SimulatedWeek, seed: u64, busy: bool) -> Element<'_, M
 fn short_key(key: &str) -> String {
     let head: String = key.chars().take(12).collect();
     format!("signer {head}\u{2026}")
-}
-
-fn panel_style(_theme: &iced::Theme) -> container::Style {
-    container::Style {
-        background: Some(iced::Color::from_rgba8(0xf6, 0xf6, 0xf8, 1.0).into()),
-        text_color: Some(iced::Color::from_rgba8(0x1a, 0x1a, 0x1f, 1.0)),
-        border: iced::Border {
-            color: iced::Color::from_rgba8(0xdd, 0xdd, 0xe0, 1.0),
-            width: 1.0,
-            radius: 6.0.into(),
-        },
-        ..container::Style::default()
-    }
 }

@@ -24,6 +24,8 @@ use fauxx_core::{
     PersonaSettings, PlatformDrift, RotationSchedule, SimulatedWeek, Status, SyntheticPersona,
 };
 
+use crate::prefs::ThemeChoice;
+
 /// One thing that can happen in the app.
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -227,6 +229,38 @@ pub enum Message {
     PrivacyLoaded(Result<Box<PrivacySnapshot>, String>),
     /// User switched the active Privacy hub tab.
     SetPrivacyTab(crate::state::PrivacyTab),
+
+    // --- Settings screen (app + device prefs) ------------------------------
+    /// User opened the Settings screen (from the Running screen). Seeds the edit
+    /// buffer from the live [`crate::prefs::DesktopSettings`].
+    OpenSettings,
+    /// User returned from Settings to the Running screen (discarding unsaved
+    /// edits in the draft buffer).
+    CloseSettings,
+    /// User picked a theme in the Settings draft.
+    SettingsSetTheme(ThemeChoice),
+    /// User stepped the auto-refresh interval (seconds); the view sends the new
+    /// value already clamped into the allowed range.
+    SettingsSetAutoRefresh(u64),
+    /// User toggled close-to-tray vs quit-on-close.
+    SettingsToggleCloseToTray(bool),
+    /// User edited the device name (blank means "let the core derive it").
+    SettingsSetDeviceName(String),
+    /// User toggled LAN sync on/off (applies at next start).
+    SettingsToggleLanSync(bool),
+    /// User edited the sync port (raw text; blank means the core default).
+    SettingsSetSyncPort(String),
+    /// User pressed Save: persist the draft and copy it into the live prefs.
+    SettingsSave,
+    /// A settings save finished. `Ok` carries a short confirmation for the
+    /// banner; `Err` carries the failure message.
+    SettingsSaved(Result<(), String>),
+
+    // --- In-app Help / FAQ screen ------------------------------------------
+    /// User opened the Help/FAQ screen (from the Running screen).
+    OpenFaq,
+    /// User returned from the Help/FAQ screen to the Running screen.
+    CloseFaq,
 
     /// The window-manager close button was pressed. We hide rather than exit
     /// (close-to-tray). Carries the window id from `window::close_requests`.

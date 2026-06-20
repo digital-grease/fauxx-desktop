@@ -59,7 +59,7 @@ fn status_panel(status: &Status) -> Element<'_, Message> {
         .padding(12)
         .width(Length::FillPortion(2))
         .height(Length::Fill)
-        .style(panel_style)
+        .style(crate::style::panel)
         .into()
 }
 
@@ -78,7 +78,7 @@ fn personas_panel(personas: &[SyntheticPersona]) -> Element<'_, Message> {
         .padding(12)
         .width(Length::FillPortion(3))
         .height(Length::Fill)
-        .style(panel_style)
+        .style(crate::style::panel)
         .into()
 }
 
@@ -129,6 +129,12 @@ fn controls(refreshing: bool) -> Element<'static, Message> {
     .on_press_maybe((!refreshing).then_some(Message::Refresh))
     .padding(8);
 
+    let settings = button(text("Settings"))
+        .on_press(Message::OpenSettings)
+        .padding(8);
+
+    let help = button(text("Help")).on_press(Message::OpenFaq).padding(8);
+
     // Bug-report path: export a scrubbed copy of the debug logs to attach to an
     // issue (opens a save dialog). See fauxx_core::logging.
     let export_logs = button(text("Export logs"))
@@ -144,6 +150,8 @@ fn controls(refreshing: bool) -> Element<'static, Message> {
         network,
         privacy,
         iced::widget::Space::new().width(Length::Fill),
+        settings,
+        help,
         export_logs,
         refresh,
     ]
@@ -161,19 +169,4 @@ fn labeled(label: &str, value: String) -> Element<'static, Message> {
     ]
     .spacing(8)
     .into()
-}
-
-fn panel_style(_theme: &iced::Theme) -> container::Style {
-    container::Style {
-        background: Some(iced::Color::from_rgba8(0xf6, 0xf6, 0xf8, 1.0).into()),
-        // Styled containers in iced 0.14 render child text in an undefined
-        // color unless `text_color` is set; pin to dark grey for legibility.
-        text_color: Some(iced::Color::from_rgba8(0x1a, 0x1a, 0x1f, 1.0)),
-        border: iced::Border {
-            color: iced::Color::from_rgba8(0xdd, 0xdd, 0xe0, 1.0),
-            width: 1.0,
-            radius: 6.0.into(),
-        },
-        ..container::Style::default()
-    }
 }

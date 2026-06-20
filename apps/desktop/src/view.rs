@@ -61,6 +61,12 @@ pub fn view(app: &App) -> Element<'_, Message> {
             tab,
             busy,
         } => crate::views::privacy::view(snapshot.as_deref(), *tab, *busy),
+        AppState::Settings {
+            draft,
+            port_text,
+            busy,
+        } => crate::views::settings::view(draft, port_text, *busy),
+        AppState::Faq => crate::views::faq::view(),
         AppState::Wizard {
             step,
             payload,
@@ -105,14 +111,8 @@ fn error_banner(msg: &str) -> Element<'_, Message> {
         .align_y(iced::Alignment::Center),
     )
     .padding(8)
-    .style(|_| container::Style {
-        background: Some(iced::Color::from_rgba8(0xff, 0xe5, 0xe5, 1.0).into()),
-        // iced 0.14's styled containers do not inherit the theme text color
-        // when `text_color` is None, so children render in an undefined color.
-        // Pin it so the banner text and Dismiss label are legible.
-        text_color: Some(iced::Color::from_rgba8(0x66, 0x00, 0x00, 1.0)),
-        ..container::Style::default()
-    })
+    // Theme-aware danger styling so the banner is legible in Light and Dark.
+    .style(crate::style::error_banner)
     .width(Length::Fill)
     .into()
 }
@@ -160,6 +160,12 @@ mod tests {
                     tab: PrivacyTab::Dsar,
                     busy: true,
                 },
+                AppState::Settings {
+                    draft: crate::prefs::DesktopSettings::default(),
+                    port_text: String::new(),
+                    busy: false,
+                },
+                AppState::Faq,
             ]
         };
         for state in states() {

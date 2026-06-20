@@ -74,7 +74,7 @@ fn loaded<'a>(snapshot: &'a NetworkSnapshot, busy: bool) -> Element<'a, Message>
         )
         .padding(12)
         .width(Length::Fill)
-        .style(panel_style)
+        .style(crate::style::panel)
         .into();
     }
 
@@ -122,7 +122,7 @@ fn persona_picker<'a>(snapshot: &'a NetworkSnapshot, busy: bool) -> Element<'a, 
     )
     .padding(12)
     .width(Length::Fill)
-    .style(panel_style)
+    .style(crate::style::panel)
     .into()
 }
 
@@ -133,22 +133,35 @@ fn exit_panel(exit: Option<&EgressExit>) -> Element<'_, Message> {
     match exit {
         Some(exit) => {
             col = col.push(labeled("Exits via", exit.label.clone()));
-            let (state, color) = if exit.paused {
-                ("PAUSED", Color::from_rgba8(0xb0, 0x00, 0x20, 1.0))
+            let state_color: fn(&iced::Theme) -> Color = if exit.paused {
+                crate::style::danger_color
             } else if exit.reachable {
-                ("reachable", Color::from_rgba8(0x10, 0x6a, 0x30, 1.0))
+                crate::style::success_color
             } else {
-                ("unreachable", Color::from_rgba8(0x9a, 0x6a, 0x00, 1.0))
+                crate::style::warning_color
+            };
+            let state = if exit.paused {
+                "PAUSED"
+            } else if exit.reachable {
+                "reachable"
+            } else {
+                "unreachable"
             };
             col = col.push(
                 row![
                     text("State:").size(11).width(Length::Fixed(80.0)),
-                    text(state).size(11).color(color),
+                    text(state)
+                        .size(11)
+                        .style(move |t| crate::style::text_in(state_color(t))),
                 ]
                 .spacing(8),
             );
             if let Some(reason) = &exit.paused_reason {
-                col = col.push(text(reason.clone()).size(11).color(color));
+                col = col.push(
+                    text(reason.clone())
+                        .size(11)
+                        .style(move |t| crate::style::text_in(state_color(t))),
+                );
             }
         }
         None => col = col.push(text("No exit indicator available.").size(12)),
@@ -157,7 +170,7 @@ fn exit_panel(exit: Option<&EgressExit>) -> Element<'_, Message> {
     container(col)
         .padding(12)
         .width(Length::Fill)
-        .style(panel_style)
+        .style(crate::style::panel)
         .into()
 }
 
@@ -184,7 +197,7 @@ fn egress_panel(current: &Egress, busy: bool) -> Element<'static, Message> {
     container(col)
         .padding(12)
         .width(Length::Fill)
-        .style(panel_style)
+        .style(crate::style::panel)
         .into()
 }
 
@@ -225,13 +238,13 @@ fn dns_panel(current: &DnsStrategy, note: &str, busy: bool) -> Element<'static, 
         container(text(note.to_string()).size(11))
             .padding(8)
             .width(Length::Fill)
-            .style(note_style),
+            .style(crate::style::warning_pill),
     );
 
     container(col)
         .padding(12)
         .width(Length::Fill)
-        .style(panel_style)
+        .style(crate::style::panel)
         .into()
 }
 
@@ -275,31 +288,5 @@ pub struct IdChoice {
 impl std::fmt::Display for IdChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.label)
-    }
-}
-
-fn panel_style(_theme: &iced::Theme) -> container::Style {
-    container::Style {
-        background: Some(iced::Color::from_rgba8(0xf6, 0xf6, 0xf8, 1.0).into()),
-        text_color: Some(iced::Color::from_rgba8(0x1a, 0x1a, 0x1f, 1.0)),
-        border: iced::Border {
-            color: iced::Color::from_rgba8(0xdd, 0xdd, 0xe0, 1.0),
-            width: 1.0,
-            radius: 6.0.into(),
-        },
-        ..container::Style::default()
-    }
-}
-
-fn note_style(_theme: &iced::Theme) -> container::Style {
-    container::Style {
-        background: Some(iced::Color::from_rgba8(0xff, 0xf7, 0xe0, 1.0).into()),
-        text_color: Some(iced::Color::from_rgba8(0x4a, 0x3a, 0x00, 1.0)),
-        border: iced::Border {
-            color: iced::Color::from_rgba8(0xe6, 0xd9, 0xa8, 1.0),
-            width: 1.0,
-            radius: 4.0.into(),
-        },
-        ..container::Style::default()
     }
 }

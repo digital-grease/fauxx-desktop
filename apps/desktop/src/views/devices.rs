@@ -123,7 +123,7 @@ fn pairing_panel<'a>(snapshot: &'a DevicesSnapshot) -> Element<'a, Message> {
         .padding(12)
         .width(Length::FillPortion(2))
         .height(Length::Fill)
-        .style(panel_style)
+        .style(crate::style::panel)
         .into()
 }
 
@@ -153,7 +153,7 @@ fn mode_panel(active: CoordinationMode, busy: bool) -> Element<'static, Message>
     container(col)
         .padding(12)
         .width(Length::Fill)
-        .style(panel_style)
+        .style(crate::style::panel)
         .into()
 }
 
@@ -206,7 +206,7 @@ fn paired_panel<'a>(paired: &'a [PairedPeer], busy: bool) -> Element<'a, Message
     container(col)
         .padding(12)
         .width(Length::Fill)
-        .style(panel_style)
+        .style(crate::style::panel)
         .into()
 }
 
@@ -259,7 +259,7 @@ fn discovered_panel<'a>(discovered: &'a [DiscoveredPeer]) -> Element<'a, Message
     container(col)
         .padding(12)
         .width(Length::Fill)
-        .style(panel_style)
+        .style(crate::style::panel)
         .into()
 }
 
@@ -267,19 +267,4 @@ fn labeled(label: &str, value: String) -> Element<'static, Message> {
     column![text(format!("{label}:")).size(11), text(value).size(11),]
         .spacing(2)
         .into()
-}
-
-fn panel_style(_theme: &iced::Theme) -> container::Style {
-    container::Style {
-        background: Some(iced::Color::from_rgba8(0xf6, 0xf6, 0xf8, 1.0).into()),
-        // Styled containers in iced 0.14 render child text in an undefined
-        // color unless `text_color` is set; pin to dark grey for legibility.
-        text_color: Some(iced::Color::from_rgba8(0x1a, 0x1a, 0x1f, 1.0)),
-        border: iced::Border {
-            color: iced::Color::from_rgba8(0xdd, 0xdd, 0xe0, 1.0),
-            width: 1.0,
-            radius: 6.0.into(),
-        },
-        ..container::Style::default()
-    }
 }

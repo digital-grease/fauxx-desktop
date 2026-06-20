@@ -26,12 +26,18 @@ use crate::message::{
     BrokerDiffSnapshot, CampaignDraft, CampaignsSnapshot, DashboardSnapshot, DevicesSnapshot,
     NetworkSnapshot, PrivacySnapshot, StudioSnapshot,
 };
+use crate::prefs::DesktopSettings;
 use crate::tray::TrayHandle;
 
 /// Top-level iced application state.
 pub struct App {
     /// The shared core handle. Cloned into background tasks; never blocked on.
     pub core: Core,
+    /// The GUI-local desktop settings (theme, auto-refresh cadence, close-to-tray,
+    /// and the device/sync prefs applied at the next start). Loaded once at
+    /// construction; the Settings screen edits a draft and writes it back here on
+    /// Save. Drives [`App::theme`] and the subscription tick cadence.
+    pub prefs: DesktopSettings,
     /// The current finite state.
     pub state: AppState,
     /// Non-fatal error banner shown above the body. Distinct from
@@ -148,6 +154,23 @@ pub enum AppState {
         /// `true` while a pairing import is in flight.
         busy: bool,
     },
+    /// The app + device Settings screen: the appearance/behavior prefs (theme,
+    /// auto-refresh, close-to-tray) and the device/sync prefs (device name,
+    /// LAN-sync, port) applied at the next start. `draft` is the in-progress edit
+    /// buffer; Save persists it and copies it into [`App::prefs`].
+    Settings {
+        /// The edit buffer the form mutates locally before Save.
+        draft: DesktopSettings,
+        /// The raw text buffer for the sync-port field, so partial edits (while
+        /// typing a port) are allowed; parsed to `Option<u16>` on Save (empty =
+        /// core default, invalid = a surfaced error that aborts the save).
+        port_text: String,
+        /// `true` while a save is in flight.
+        busy: bool,
+    },
+    /// The in-app Help / FAQ screen: static, scrollable reference content. Holds
+    /// no payload (it makes no core call) and returns to Running.
+    Faq,
     /// Unrecoverable boot error. The window renders the message; the user can
     /// quit from the tray. A store that fails to open lands here (we render an
     /// error rather than panicking, per the task spec).
@@ -222,14 +245,23 @@ impl WizardStep {
 }
 
 impl App {
-    /// Construct the initial app in [`AppState::Loading`].
+    /// Construct the initial app in [`AppState::Loading`]. Loads the GUI-local
+    /// settings up front so the theme and tick cadence apply from the first
+    /// frame (a missing or malformed file falls back to defaults).
     pub fn new(core: Core, tray: Option<TrayHandle>) -> Self {
         Self {
             core,
+            prefs: crate::prefs::load(),
             state: AppState::Loading,
             error_banner: None,
             tray,
         }
+    }
+
+    /// The active iced theme, derived from the user's saved theme choice. Passed
+    /// to iced via `.theme(App::theme)`.
+    pub fn theme(&self) -> iced::Theme {
+        self.prefs.theme.to_theme()
     }
 
     /// Window title. A `&App -> String` fn, as iced's `.title()` expects.
@@ -246,6 +278,8 @@ impl App {
             AppState::Campaigns { .. } => "Fauxx (campaigns)".to_string(),
             AppState::Network { .. } => "Fauxx (egress and DNS)".to_string(),
             AppState::Privacy { .. } => "Fauxx (privacy)".to_string(),
+            AppState::Settings { .. } => "Fauxx (settings)".to_string(),
+            AppState::Faq => "Fauxx (help)".to_string(),
             AppState::Wizard { .. } => "Fauxx (setup)".to_string(),
             AppState::Error(_) => "Fauxx (error)".to_string(),
         }

@@ -1071,10 +1071,14 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
         }
 
         Message::CloseRequested(id) => {
-            // Close-to-tray: hide the window instead of destroying it, so the
-            // agent keeps running and the tray can bring it back. Quit is the
-            // only path that actually exits.
-            window::set_mode(id, window::Mode::Hidden)
+            // Honor the close-to-tray preference (Settings screen). When on (the
+            // default), hide the window so the agent keeps running and the tray
+            // can bring it back; when off, the close button quits the agent.
+            if app.prefs.close_to_tray {
+                window::set_mode(id, window::Mode::Hidden)
+            } else {
+                iced::exit()
+            }
         }
 
         // --- C3 privacy hub: DSAR / aliases / GPC / anchors ----------------
@@ -1124,6 +1128,145 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
                 *tab = new_tab;
             }
             Task::none()
+        }
+
+        // --- Settings screen (app + device prefs) --------------------------
+        Message::OpenSettings => {
+            // Seed the edit buffer from the live prefs. The port text buffer
+            // shows the current port (blank for the core default).
+            let port_text = app
+                .prefs
+                .sync_port
+                .map(|p| p.to_string())
+                .unwrap_or_default();
+            app.state = AppState::Settings {
+                draft: app.prefs.clone(),
+                port_text,
+                busy: false,
+            };
+            Task::none()
+        }
+
+        Message::CloseSettings => {
+            // Discard unsaved draft edits and return to Running via the reload.
+            app.state = AppState::Loading;
+            Task::perform(bg::load(app.core.clone()), Message::Loaded)
+        }
+
+        Message::SettingsSetTheme(choice) => {
+            if let AppState::Settings { draft, .. } = &mut app.state {
+                draft.theme = choice;
+            }
+            Task::none()
+        }
+
+        Message::SettingsSetAutoRefresh(secs) => {
+            if let AppState::Settings { draft, .. } = &mut app.state {
+                draft.auto_refresh_secs = secs.clamp(
+                    crate::prefs::MIN_REFRESH_SECS,
+                    crate::prefs::MAX_REFRESH_SECS,
+                );
+            }
+            Task::none()
+        }
+
+        Message::SettingsToggleCloseToTray(on) => {
+            if let AppState::Settings { draft, .. } = &mut app.state {
+                draft.close_to_tray = on;
+            }
+            Task::none()
+        }
+
+        Message::SettingsSetDeviceName(name) => {
+            if let AppState::Settings { draft, .. } = &mut app.state {
+                // Keep the raw text in the buffer; it is normalized (trimmed,
+                // blank -> None) on Save.
+                draft.device_name = Some(name);
+            }
+            Task::none()
+        }
+
+        Message::SettingsToggleLanSync(on) => {
+            if let AppState::Settings { draft, .. } = &mut app.state {
+                draft.lan_sync = on;
+            }
+            Task::none()
+        }
+
+        Message::SettingsSetSyncPort(text) => {
+            if let AppState::Settings { port_text, .. } = &mut app.state {
+                *port_text = text;
+            }
+            Task::none()
+        }
+
+        Message::SettingsSave => {
+            let AppState::Settings {
+                draft,
+                port_text,
+                busy,
+            } = &mut app.state
+            else {
+                return Task::none();
+            };
+            if *busy {
+                return Task::none();
+            }
+            // Parse the sync port: blank means the core default (None); a present
+            // value must be a valid port, else the save is refused with a note.
+            let trimmed = port_text.trim();
+            let parsed_port = if trimmed.is_empty() {
+                None
+            } else {
+                match trimmed.parse::<u16>() {
+                    Ok(p) if p > 0 => Some(p),
+                    _ => {
+                        app.error_banner = Some(format!(
+                            "Sync port must be a number between 1 and 65535 (got \"{trimmed}\")."
+                        ));
+                        return Task::none();
+                    }
+                }
+            };
+            // Normalize the draft, then apply it live (theme + tick cadence take
+            // effect immediately; device/sync prefs apply at the next start).
+            draft.sync_port = parsed_port;
+            draft.device_name = draft.device_name_trimmed();
+            draft.auto_refresh_secs = draft.auto_refresh_secs.clamp(
+                crate::prefs::MIN_REFRESH_SECS,
+                crate::prefs::MAX_REFRESH_SECS,
+            );
+            *busy = true;
+            let to_save = draft.clone();
+            app.prefs = to_save.clone();
+            Task::perform(bg::save_prefs(to_save), Message::SettingsSaved)
+        }
+
+        Message::SettingsSaved(result) => {
+            if let AppState::Settings { busy, .. } = &mut app.state {
+                *busy = false;
+            }
+            match result {
+                Ok(()) => {
+                    app.error_banner = Some(
+                        "Settings saved. Device name, LAN sync, and port apply at the next start."
+                            .to_string(),
+                    )
+                }
+                Err(err) => app.error_banner = Some(format!("Could not save settings: {err}")),
+            }
+            Task::none()
+        }
+
+        // --- In-app Help / FAQ screen --------------------------------------
+        Message::OpenFaq => {
+            app.state = AppState::Faq;
+            Task::none()
+        }
+
+        Message::CloseFaq => {
+            app.state = AppState::Loading;
+            Task::perform(bg::load(app.core.clone()), Message::Loaded)
         }
 
         Message::ErrorDismissed => {

@@ -1755,6 +1755,8 @@ dependencies = [
  "iced",
  "ksni",
  "rfd",
+ "serde",
+ "serde_json",
  "tracing",
  "tracing-subscriber",
  "tray-icon",

@@ -28,7 +28,7 @@
 
 use fauxx_core::{BrokerDiffTimeline, FieldChange, SnapshotDiff};
 use iced::widget::{column, container, pick_list, row, scrollable, text, Space};
-use iced::{Color, Element, Length};
+use iced::{Element, Length};
 
 use crate::message::{BrokerDiffSnapshot, Message};
 
@@ -86,7 +86,7 @@ fn loaded<'a>(snapshot: &'a BrokerDiffSnapshot, busy: bool) -> Element<'a, Messa
             container(text("No persona to inspect yet. Add or import a persona first.").size(13))
                 .padding(12)
                 .width(Length::Fill)
-                .style(panel_style)
+                .style(crate::style::panel)
                 .into()
         }
     };
@@ -171,14 +171,14 @@ fn selector_panel<'a>(snapshot: &'a BrokerDiffSnapshot, busy: bool) -> Element<'
         col = col.push(
             text("RE-LISTING DETECTED: a previously-removed field has reappeared.")
                 .size(12)
-                .color(RELISTED),
+                .style(|t| crate::style::text_in(crate::style::danger_color(t))),
         );
     }
 
     container(col)
         .padding(12)
         .width(Length::Fill)
-        .style(panel_style)
+        .style(crate::style::panel)
         .into()
 }
 
@@ -198,7 +198,7 @@ fn timeline_panel(timeline: &BrokerDiffTimeline) -> Element<'_, Message> {
         return container(col)
             .padding(12)
             .width(Length::Fill)
-            .style(panel_style)
+            .style(crate::style::panel)
             .into();
     }
 
@@ -218,7 +218,7 @@ fn timeline_panel(timeline: &BrokerDiffTimeline) -> Element<'_, Message> {
     container(col)
         .padding(12)
         .width(Length::Fill)
-        .style(panel_style)
+        .style(crate::style::panel)
         .into()
 }
 
@@ -245,7 +245,10 @@ fn diff_step(index: usize, diff: &SnapshotDiff) -> Element<'_, Message> {
             let (tag, color) = change_tag(delta.change);
             fields = fields.push(
                 row![
-                    text(tag).size(10).color(color).width(Length::Fixed(90.0)),
+                    text(tag)
+                        .size(10)
+                        .style(move |t| crate::style::text_in(color(t)))
+                        .width(Length::Fixed(90.0)),
                     text(delta.field.clone()).size(11),
                 ]
                 .spacing(8),
@@ -256,75 +259,29 @@ fn diff_step(index: usize, diff: &SnapshotDiff) -> Element<'_, Message> {
     container(column![header, fields].spacing(6))
         .padding(10)
         .width(Length::Fill)
-        .style(step_style)
+        .style(crate::style::panel_strong)
         .into()
 }
 
-/// The display tag + color for one field change.
-fn change_tag(change: FieldChange) -> (&'static str, Color) {
+/// The display tag + a theme-aware color resolver for one field change.
+///
+/// The color is returned as a `fn(&Theme) -> Color` so the tag stays legible
+/// under both the Light and Dark themes: added reads as the accent, removed and
+/// unchanged as muted captions, and a re-listing as the privacy-critical danger
+/// color (still distinct from the muted "unchanged" row in either theme).
+fn change_tag(change: FieldChange) -> (&'static str, fn(&iced::Theme) -> iced::Color) {
     match change {
-        FieldChange::Added => ("ADDED", ADDED),
-        FieldChange::Removed => ("REMOVED", REMOVED),
-        FieldChange::Unchanged => ("unchanged", UNCHANGED),
-        FieldChange::Relisted => ("RE-LISTED", RELISTED),
+        FieldChange::Added => ("ADDED", crate::style::accent_color),
+        FieldChange::Removed => ("REMOVED", crate::style::muted_color),
+        FieldChange::Unchanged => ("unchanged", crate::style::muted_color),
+        FieldChange::Relisted => ("RE-LISTED", crate::style::danger_color),
     }
 }
-
-const ADDED: Color = Color {
-    r: 0.10,
-    g: 0.45,
-    b: 0.70,
-    a: 1.0,
-};
-const REMOVED: Color = Color {
-    r: 0.55,
-    g: 0.55,
-    b: 0.58,
-    a: 1.0,
-};
-const UNCHANGED: Color = Color {
-    r: 0.40,
-    g: 0.40,
-    b: 0.44,
-    a: 1.0,
-};
-const RELISTED: Color = Color {
-    r: 0.69,
-    g: 0.00,
-    b: 0.13,
-    a: 1.0,
-};
 
 /// A compact epoch-millis label. The exact wall-clock is not load-bearing for
 /// the diff order, so this shows the raw millis (deterministic, no tz logic).
 fn short_millis(millis: i64) -> String {
     format!("t={millis}")
-}
-
-fn panel_style(_theme: &iced::Theme) -> container::Style {
-    container::Style {
-        background: Some(iced::Color::from_rgba8(0xf6, 0xf6, 0xf8, 1.0).into()),
-        text_color: Some(iced::Color::from_rgba8(0x1a, 0x1a, 0x1f, 1.0)),
-        border: iced::Border {
-            color: iced::Color::from_rgba8(0xdd, 0xdd, 0xe0, 1.0),
-            width: 1.0,
-            radius: 6.0.into(),
-        },
-        ..container::Style::default()
-    }
-}
-
-fn step_style(_theme: &iced::Theme) -> container::Style {
-    container::Style {
-        background: Some(iced::Color::from_rgba8(0xff, 0xff, 0xff, 1.0).into()),
-        text_color: Some(iced::Color::from_rgba8(0x1a, 0x1a, 0x1f, 1.0)),
-        border: iced::Border {
-            color: iced::Color::from_rgba8(0xe5, 0xe5, 0xe8, 1.0),
-            width: 1.0,
-            radius: 4.0.into(),
-        },
-        ..container::Style::default()
-    }
 }
 
 #[cfg(test)]
@@ -339,9 +296,14 @@ mod tests {
         // A re-listing (a broker re-adding deleted data) is the privacy-critical
         // signal the view must flag distinctly from an unchanged row.
         assert_eq!(change_tag(FieldChange::Relisted).0, "RE-LISTED");
+        // The color is now resolved from the active theme. Resolve both against
+        // a concrete theme to confirm the re-listed flag stays a distinct color
+        // from the muted "unchanged" row.
+        let theme = iced::Theme::Light;
+        let relisted = (change_tag(FieldChange::Relisted).1)(&theme);
+        let unchanged = (change_tag(FieldChange::Unchanged).1)(&theme);
         assert!(
-            (change_tag(FieldChange::Relisted).1.r - change_tag(FieldChange::Unchanged).1.r).abs()
-                > f32::EPSILON,
+            (relisted.r - unchanged.r).abs() > f32::EPSILON,
             "the re-listed flag must be a distinct colour from unchanged"
         );
     }

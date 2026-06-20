@@ -32,7 +32,11 @@ mod firstrun;
 #[cfg(feature = "gui")]
 mod message;
 #[cfg(feature = "gui")]
+mod prefs;
+#[cfg(feature = "gui")]
 mod state;
+#[cfg(feature = "gui")]
+mod style;
 #[cfg(feature = "gui")]
 mod tray;
 #[cfg(feature = "gui")]
@@ -103,6 +107,7 @@ fn gui_main() -> iced::Result {
         view::view,
     )
     .title(App::title)
+    .theme(App::theme)
     .subscription(subscription)
     // Close-to-tray: the window-manager close button hides the window instead
     // of exiting. The agent and tray stay resident; the tray's "Quit" item is
@@ -129,7 +134,9 @@ fn subscription(app: &crate::state::App) -> iced::Subscription<crate::message::M
         iced::window::close_requests().map(Message::CloseRequested),
     ];
     if matches!(app.state, AppState::Running { .. }) {
-        subs.push(iced::time::every(std::time::Duration::from_secs(2)).map(|_| Message::Tick));
+        // The tick cadence is the user-configurable auto-refresh interval (the
+        // Settings screen), clamped to a sane range. Defaults to 2s.
+        subs.push(iced::time::every(app.prefs.refresh_interval()).map(|_| Message::Tick));
     }
     iced::Subscription::batch(subs)
 }

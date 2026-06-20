@@ -52,7 +52,7 @@ pub fn view<'a>(
     let card = container(column![progress(step), body, nav(step, busy)].spacing(16))
         .padding(20)
         .width(Length::Fixed(560.0))
-        .style(panel_style);
+        .style(crate::style::panel);
 
     container(card)
         .width(Length::Fill)
@@ -166,17 +166,4 @@ fn nav(step: WizardStep, busy: bool) -> Element<'static, Message> {
         .spacing(8)
         .align_y(iced::Alignment::Center)
         .into()
-}
-
-fn panel_style(_theme: &iced::Theme) -> container::Style {
-    container::Style {
-        background: Some(iced::Color::from_rgba8(0xf6, 0xf6, 0xf8, 1.0).into()),
-        text_color: Some(iced::Color::from_rgba8(0x1a, 0x1a, 0x1f, 1.0)),
-        border: iced::Border {
-            color: iced::Color::from_rgba8(0xdd, 0xdd, 0xe0, 1.0),
-            width: 1.0,
-            radius: 8.0.into(),
-        },
-        ..container::Style::default()
-    }
 }

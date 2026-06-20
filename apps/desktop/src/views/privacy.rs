@@ -25,27 +25,12 @@
 //! [`Message`] the update fn turns into a reload or a tab switch.
 
 use iced::widget::{button, column, container, row, scrollable, text, Space};
-use iced::{Color, Element, Length};
+use iced::{Element, Length};
 
 use crate::message::{
     AliasRow, AnchorRecommendationRow, AnchorRow, DsarRow, GpcRow, Message, PrivacySnapshot,
 };
 use crate::state::PrivacyTab;
-
-/// Red flag for an overdue DSAR deadline.
-const OVERDUE: Color = Color {
-    r: 0.69,
-    g: 0.0,
-    b: 0.13,
-    a: 1.0,
-};
-/// Muted grey for secondary text (on-track deadlines, "not sent", etc.).
-const MUTED: Color = Color {
-    r: 0.42,
-    g: 0.42,
-    b: 0.47,
-    a: 1.0,
-};
 
 /// Render the privacy hub: toolbar, tab selector, and the active tab's section.
 pub fn view(
@@ -113,7 +98,7 @@ fn loaded(snapshot: &PrivacySnapshot, tab: PrivacyTab) -> Element<'_, Message> {
         container(section)
             .padding(12)
             .width(Length::Fill)
-            .style(panel_style),
+            .style(crate::style::panel),
     )
     .height(Length::Fill)
     .into()
@@ -129,7 +114,15 @@ fn dsar_section(rows: &[DsarRow]) -> Element<'_, Message> {
     )]
     .spacing(6);
     for r in rows {
-        let deadline_color = if r.overdue { OVERDUE } else { MUTED };
+        let deadline = if r.overdue {
+            text(r.deadline.as_str())
+                .size(13)
+                .style(|t| crate::style::text_in(crate::style::danger_color(t)))
+        } else {
+            text(r.deadline.as_str())
+                .size(13)
+                .style(crate::style::muted_text)
+        };
         col = col.push(
             row![
                 text(r.controller.as_str())
@@ -139,10 +132,7 @@ fn dsar_section(rows: &[DsarRow]) -> Element<'_, Message> {
                 text(r.status.as_str())
                     .size(13)
                     .width(Length::FillPortion(2)),
-                text(r.deadline.as_str())
-                    .size(13)
-                    .color(deadline_color)
-                    .width(Length::FillPortion(2)),
+                deadline.width(Length::FillPortion(2)),
             ]
             .spacing(8),
         );
@@ -166,7 +156,7 @@ fn alias_section(rows: &[AliasRow]) -> Element<'_, Message> {
                 text(a.kind.as_str()).size(12).width(Length::FillPortion(1)),
                 text(a.status.as_str())
                     .size(12)
-                    .color(MUTED)
+                    .style(crate::style::muted_text)
                     .width(Length::FillPortion(1)),
             ]
             .spacing(8),
@@ -182,20 +172,19 @@ fn gpc_section(rows: &[GpcRow]) -> Element<'_, Message> {
     }
     let mut col = column![section_title("Per-site Global Privacy Control honoring")].spacing(6);
     for g in rows {
-        let (label, color) = if g.honored {
-            ("honored", MUTED)
+        let status = if g.honored {
+            text("honored").size(13).style(crate::style::muted_text)
         } else {
-            ("NOT honored", OVERDUE)
+            text("NOT honored")
+                .size(13)
+                .style(|t| crate::style::text_in(crate::style::danger_color(t)))
         };
         col = col.push(
             row![
                 text(g.origin.as_str())
                     .size(14)
                     .width(Length::FillPortion(3)),
-                text(label)
-                    .size(13)
-                    .color(color)
-                    .width(Length::FillPortion(1)),
+                status.width(Length::FillPortion(1)),
             ]
             .spacing(8),
         );
@@ -214,9 +203,11 @@ fn anchor_section<'a>(
     let mut col = column![section_title("Account anchors (real identity touchpoints)")].spacing(6);
     for a in rows {
         let linkage = if a.linked {
-            text("linked").size(12).color(OVERDUE)
+            text("linked")
+                .size(12)
+                .style(|t| crate::style::text_in(crate::style::danger_color(t)))
         } else {
-            text("isolated").size(12).color(MUTED)
+            text("isolated").size(12).style(crate::style::muted_text)
         };
         col = col.push(
             row![
@@ -226,7 +217,7 @@ fn anchor_section<'a>(
                 text(a.site.as_str()).size(13).width(Length::FillPortion(2)),
                 text(format!("{} signals", a.signals))
                     .size(12)
-                    .color(MUTED)
+                    .style(crate::style::muted_text)
                     .width(Length::FillPortion(1)),
                 linkage.width(Length::FillPortion(1)),
             ]
@@ -248,16 +239,20 @@ fn anchor_section<'a>(
                         .width(Length::FillPortion(2)),
                     text(r.action.as_str())
                         .size(13)
-                        .color(OVERDUE)
+                        .style(|t| crate::style::text_in(crate::style::danger_color(t)))
                         .width(Length::FillPortion(2)),
                     text(format!("score {}", r.score))
                         .size(12)
-                        .color(MUTED)
+                        .style(crate::style::muted_text)
                         .width(Length::FillPortion(1)),
                 ]
                 .spacing(8),
             );
-            col = col.push(text(r.rationale.as_str()).size(11).color(MUTED));
+            col = col.push(
+                text(r.rationale.as_str())
+                    .size(11)
+                    .style(crate::style::muted_text),
+            );
         }
     }
     col.into()
@@ -270,24 +265,14 @@ fn section_title(label: &str) -> Element<'_, Message> {
 
 /// The empty-state line for a section with no data yet.
 fn empty(message: &str) -> Element<'_, Message> {
-    container(text(message.to_string()).size(13).color(MUTED))
-        .padding(12)
-        .width(Length::Fill)
-        .into()
-}
-
-/// A light card background for the section list.
-fn panel_style(_theme: &iced::Theme) -> container::Style {
-    container::Style {
-        background: Some(iced::Color::from_rgba8(0xff, 0xff, 0xff, 1.0).into()),
-        text_color: Some(iced::Color::from_rgba8(0x1a, 0x1a, 0x1f, 1.0)),
-        border: iced::Border {
-            color: iced::Color::from_rgba8(0xe5, 0xe5, 0xe8, 1.0),
-            width: 1.0,
-            radius: 4.0.into(),
-        },
-        ..container::Style::default()
-    }
+    container(
+        text(message.to_string())
+            .size(13)
+            .style(crate::style::muted_text),
+    )
+    .padding(12)
+    .width(Length::Fill)
+    .into()
 }
 
 #[cfg(test)]
