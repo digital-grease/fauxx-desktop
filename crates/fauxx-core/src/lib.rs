@@ -177,6 +177,12 @@ pub struct Config {
     device_name: String,
     /// TCP port the sync transport advertises in the QR and mDNS TXT record.
     sync_port: u16,
+    /// IP address the inbound sync listener binds. `None` resolves to
+    /// `0.0.0.0` (all interfaces, the zero-config LAN default). Set it to a
+    /// specific LAN address to limit the listener to one interface, or to
+    /// `127.0.0.1` to refuse off-host connections entirely. The sealed channel is
+    /// paired-only and fail-closed regardless; this only narrows the TCP surface.
+    bind_addr: Option<std::net::IpAddr>,
     /// Optional idle/lock gating policy (C8 #32). `None` (the default) means
     /// NO gating: campaign-driven intensity is used as-is, so a dedicated headless
     /// box runs at full rate. `Some(policy)` attaches the dep-free
@@ -202,6 +208,7 @@ impl Config {
             key_source: KeySource::OsKeystore,
             device_name: default_device_name(),
             sync_port: sync::DEFAULT_SYNC_PORT,
+            bind_addr: None,
             idle_gating: None,
             lan_sync: false,
         }
@@ -229,6 +236,24 @@ impl Config {
     pub fn with_sync_port(mut self, port: u16) -> Self {
         self.sync_port = port;
         self
+    }
+
+    /// Override the IP address the inbound sync listener binds. The default
+    /// (`0.0.0.0`, all interfaces) keeps LAN sync zero-config; pin it to a single
+    /// LAN address to reduce the listener's surface, or to `127.0.0.1` to refuse
+    /// off-host connections. Does not change the sealed-channel guarantees (an
+    /// unpaired peer still cannot read or forge), only which interfaces accept a
+    /// TCP connection at all.
+    pub fn with_bind_addr(mut self, addr: std::net::IpAddr) -> Self {
+        self.bind_addr = Some(addr);
+        self
+    }
+
+    /// The resolved inbound-listener bind IP: the configured address, or the
+    /// `0.0.0.0` all-interfaces default.
+    pub fn bind_addr(&self) -> std::net::IpAddr {
+        self.bind_addr
+            .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED))
     }
 
     /// Enable idle/lock-aware gating (C8 #32) with `policy`, using the dep-free
@@ -384,6 +409,11 @@ struct Inner {
     /// peers each tick so a freshly-seen peer becomes reachable. `None` means the
     /// engine has no live transport (the default, sealed-but-socketless mode).
     sync_routes: Option<sync::RoutingTable>,
+    /// The IP the inbound sync listener binds (C1 #7), resolved from
+    /// [`Config::bind_addr`]. Defaults to `0.0.0.0` (all interfaces); set via
+    /// [`Config::with_bind_addr`] to narrow the listener to one interface or to
+    /// loopback. Read by [`Core::sync_listen_addr`].
+    sync_bind_ip: std::net::IpAddr,
 }
 
 impl Default for Inner {
@@ -400,6 +430,7 @@ impl Default for Inner {
             campaign_planner: None,
             idle_planner: None,
             sync_routes: None,
+            sync_bind_ip: std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
         }
     }
 }
@@ -548,6 +579,7 @@ impl Core {
                 campaign_planner: Some(campaign_planner),
                 idle_planner,
                 sync_routes,
+                sync_bind_ip: config.bind_addr(),
             }),
         })
     }
@@ -958,11 +990,12 @@ impl Core {
         self.sync_engine()?.advertise_if_enabled().await
     }
 
-    /// The socket address the inbound sync listener binds (all interfaces, on the
-    /// configured sync port). Errors on a store-less core.
+    /// The socket address the inbound sync listener binds: the configured bind IP
+    /// (default `0.0.0.0`, all interfaces) on the configured sync port. Errors on
+    /// a store-less core. See [`Config::with_bind_addr`].
     pub fn sync_listen_addr(&self) -> Result<std::net::SocketAddr> {
         let port = self.sync_engine()?.port();
-        Ok(std::net::SocketAddr::from(([0, 0, 0, 0], port)))
+        Ok(std::net::SocketAddr::new(self.inner.sync_bind_ip, port))
     }
 
     /// Add an explicit route (peer public key -> address) to the live transport's
@@ -3260,6 +3293,29 @@ mod tests {
                 path: dir.join("key.bin"),
                 passphrase: "core-test-passphrase".to_string(),
             })
+    }
+
+    #[test]
+    fn bind_addr_defaults_to_all_interfaces_and_overrides() {
+        use std::net::{IpAddr, Ipv4Addr};
+        // Default: 0.0.0.0 (all interfaces), preserving the zero-config LAN bind.
+        assert_eq!(Config::new().bind_addr(), IpAddr::V4(Ipv4Addr::UNSPECIFIED));
+        // Override narrows it (e.g. loopback to refuse off-host connections).
+        let pinned = Config::new().with_bind_addr(IpAddr::V4(Ipv4Addr::LOCALHOST));
+        assert_eq!(pinned.bind_addr(), IpAddr::V4(Ipv4Addr::LOCALHOST));
+    }
+
+    #[tokio::test]
+    async fn sync_listen_addr_honors_the_configured_bind_addr() -> Result<()> {
+        use std::net::{IpAddr, Ipv4Addr};
+        let dir = tempfile::tempdir()?;
+        let core =
+            Core::open(temp_config(dir.path()).with_bind_addr(IpAddr::V4(Ipv4Addr::LOCALHOST)))
+                .await?;
+        let addr = core.sync_listen_addr()?;
+        assert_eq!(addr.ip(), IpAddr::V4(Ipv4Addr::LOCALHOST));
+        assert_eq!(addr.port(), sync::DEFAULT_SYNC_PORT);
+        Ok(())
     }
 
     fn sample() -> SyntheticPersona {

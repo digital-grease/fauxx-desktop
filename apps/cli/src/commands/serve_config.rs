@@ -92,6 +92,14 @@ pub struct ServeConfig {
     /// on one host. Only relevant when `lan_sync` is on.
     pub sync_port: Option<u16>,
 
+    /// The IP the LAN sync listener binds. `None` (or absent) uses the core
+    /// default `0.0.0.0` (all interfaces). Set it to a specific LAN address to
+    /// limit the listener to one interface, or to `127.0.0.1` to refuse off-host
+    /// connections. The sealed channel is paired-only and fail-closed regardless;
+    /// this only narrows which interfaces accept a TCP connection. An invalid
+    /// address fails the serve start closed. Only relevant when `lan_sync` is on.
+    pub bind_addr: Option<String>,
+
     /// Idle/lock-aware rate gating (C8 #32 U1). `None` (or absent) leaves the
     /// daemon ungated (decoy runs at the campaign intensity). When present and
     /// enabled, serve opens the core with a real per-OS idle source so decoy
@@ -110,6 +118,7 @@ impl Default for ServeConfig {
             mqtt: None,
             lan_sync: false,
             sync_port: None,
+            bind_addr: None,
             idle: None,
         }
     }

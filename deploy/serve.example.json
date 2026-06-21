@@ -5,6 +5,7 @@
   "tickIntervalSecs": 60,
   "lanSync": false,
   "syncPort": 45999,
+  "bindAddr": "0.0.0.0",
   "mqtt": {
     "enabled": false,
     "host": "homeassistant.lan",

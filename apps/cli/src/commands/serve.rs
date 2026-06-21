@@ -63,6 +63,15 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
     if let Some(port) = serve_config.sync_port {
         config = config.with_sync_port(port);
     }
+    // Optional listener bind address (#37): narrow the LAN listener to one
+    // interface (or loopback) instead of the 0.0.0.0 default. Fail closed on a
+    // malformed address rather than silently falling back to all-interfaces.
+    if let Some(bind) = &serve_config.bind_addr {
+        let ip: std::net::IpAddr = bind
+            .parse()
+            .with_context(|| format!("invalid serve bindAddr {bind:?} (expected an IP address)"))?;
+        config = config.with_bind_addr(ip);
+    }
 
     // Fail closed: a store that cannot open is a hard error, never an
     // unencrypted or partial start.
