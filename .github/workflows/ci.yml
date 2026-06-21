@@ -29,6 +29,12 @@ env:
   RUSTFLAGS: "-D warnings"
   CARGO_INCREMENTAL: 0
 
+# Least-privilege default for every job: read-only checkout. No CI lane writes
+# to the repo (artifact uploads use the artifacts API, not `contents`), so this
+# read-only token is sufficient and satisfies the workflow-permissions hardening.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
