@@ -59,6 +59,16 @@ pub enum Message {
     /// An `unpair` call finished. `Err` carries a message for the banner; on
     /// success the Devices view is reloaded so the peer list updates.
     Unpaired(Result<(), String>),
+    /// User edited the "Pair a device back" payload field in the Devices view
+    /// (issue #42 symmetric pairing).
+    DevicePairBackChanged(String),
+    /// User submitted the pasted pairing code to pair the other device back from
+    /// the Devices view, so this device can authenticate inbound pushes from it
+    /// (issue #42 symmetric pairing).
+    DevicePairBack,
+    /// A Devices-view pair-back finished. `Ok` carries a short summary line; on
+    /// success the view reloads so the newly paired device appears.
+    DevicePairedBack(Result<String, String>),
     // --- C4 #20 A1 efficacy dashboard --------------------------------------
     /// User opened the efficacy "Dashboard" view (from the Running screen).
     OpenDashboard,

@@ -1055,11 +1055,18 @@ impl Core {
     /// Once attributed, the frame is routed to its dedicated verified path by
     /// kind. Returns `(sender base64url key, applied kind name)`.
     pub async fn ingest_inbound_frame(&self, frame: &[u8]) -> Result<(String, &'static str)> {
+        // Issue #42: LAN-sync pairing is per-device. A push from a peer this
+        // device has not paired back cannot be authenticated (the sealed frame
+        // carries no cleartext sender, so attribution is by trying each paired
+        // key). Surface a clear, actionable message instead of a bare auth
+        // failure, mirroring the two-way pairing guidance shipped on the Android
+        // side (fauxx#213).
+        const PAIR_BOTH_WAYS_HINT: &str = "LAN-sync pairing must be completed on BOTH devices: pair the other device from this device too (open Devices and use \"Pair a device back\", or run `fauxx-cli pair add <code>`).";
         let peers = self.paired_peers().await?;
         if peers.is_empty() {
-            return Err(CoreError::Sync(
-                "inbound sync frame but no paired peers; nothing can authenticate it".to_string(),
-            ));
+            return Err(CoreError::Sync(format!(
+                "received a LAN sync push, but this device has not paired any device, so nothing can authenticate it. {PAIR_BOTH_WAYS_HINT}"
+            )));
         }
         for peer in peers {
             // Peek: does this frame open + authenticate as from `peer`?
@@ -1092,9 +1099,9 @@ impl Core {
             };
             return Ok((peer.public_key, kind));
         }
-        Err(CoreError::Sync(
-            "inbound frame did not authenticate against any paired peer".to_string(),
-        ))
+        Err(CoreError::Sync(format!(
+            "received a LAN sync push, but this device has not paired the sender back, so it cannot be authenticated. {PAIR_BOTH_WAYS_HINT} If you did not start a sync, you can safely ignore this."
+        )))
     }
 
     /// Run the inbound sync listener until `shutdown` is notified. Binds the sync

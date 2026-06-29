@@ -29,14 +29,19 @@
 //! peers, mode).
 
 use fauxx_core::{CoordinationMode, DiscoveredPeer, PairedPeer};
-use iced::widget::{button, column, container, row, scrollable, svg, text};
+use iced::widget::{button, column, container, row, scrollable, svg, text, text_input};
 use iced::{Element, Length};
 
 use crate::message::{DevicesSnapshot, Message};
 
-pub fn view(snapshot: Option<&DevicesSnapshot>, busy: bool) -> Element<'_, Message> {
-    let body: Element<'_, Message> = match snapshot {
-        Some(snapshot) => loaded(snapshot, busy),
+pub fn view<'a>(
+    snapshot: Option<&'a DevicesSnapshot>,
+    busy: bool,
+    pair_back_input: &'a str,
+    pair_back_note: Option<&'a str>,
+) -> Element<'a, Message> {
+    let body: Element<'a, Message> = match snapshot {
+        Some(snapshot) => loaded(snapshot, busy, pair_back_input, pair_back_note),
         None => text("Loading device and pairing details...")
             .size(14)
             .into(),
@@ -69,9 +74,21 @@ fn toolbar(busy: bool) -> Element<'static, Message> {
     .into()
 }
 
-/// The two-column body shown once a snapshot is loaded: pairing on the left,
-/// peers + mode on the right.
-fn loaded<'a>(snapshot: &'a DevicesSnapshot, busy: bool) -> Element<'a, Message> {
+/// The two-column body shown once a snapshot is loaded: pairing (QR + pair-back)
+/// on the left, peers + mode on the right.
+fn loaded<'a>(
+    snapshot: &'a DevicesSnapshot,
+    busy: bool,
+    pair_back_input: &'a str,
+    pair_back_note: Option<&'a str>,
+) -> Element<'a, Message> {
+    let left = column![
+        pairing_panel(snapshot),
+        pair_back_panel(pair_back_input, pair_back_note, busy),
+    ]
+    .spacing(12)
+    .width(Length::FillPortion(2));
+
     let right = column![
         mode_panel(snapshot.mode, busy),
         paired_panel(&snapshot.paired, busy),
@@ -81,7 +98,7 @@ fn loaded<'a>(snapshot: &'a DevicesSnapshot, busy: bool) -> Element<'a, Message>
     .width(Length::FillPortion(3));
 
     row![
-        pairing_panel(snapshot),
+        scrollable(left).height(Length::Fill),
         scrollable(right).height(Length::Fill)
     ]
     .spacing(16)
@@ -106,7 +123,10 @@ fn pairing_panel<'a>(snapshot: &'a DevicesSnapshot) -> Element<'a, Message> {
                 .width(Length::Fill)
                 .align_x(iced::alignment::Horizontal::Center),
             );
-            col = col.push(text("Scan this with the Fauxx phone app to pair.").size(11));
+            col = col.push(
+                text("Step 1 of 2: scan this with the Fauxx phone app so it pairs this device.")
+                    .size(11),
+            );
         }
         None => {
             col = col.push(
@@ -121,8 +141,55 @@ fn pairing_panel<'a>(snapshot: &'a DevicesSnapshot) -> Element<'a, Message> {
 
     container(col)
         .padding(12)
-        .width(Length::FillPortion(2))
-        .height(Length::Fill)
+        .width(Length::Fill)
+        .style(crate::style::panel)
+        .into()
+}
+
+/// The symmetric-pairing control (issue #42): paste the OTHER device's pairing
+/// code so THIS device pairs it back. LAN-sync pairing is per-device, so until
+/// this is done an inbound push from the phone is rejected because this device
+/// cannot authenticate a peer it has not paired. Mirrors the two-way guidance
+/// shipped on the Android side (fauxx#213).
+fn pair_back_panel<'a>(
+    pair_back_input: &'a str,
+    pair_back_note: Option<&'a str>,
+    busy: bool,
+) -> Element<'a, Message> {
+    let mut col = column![
+        text("Pair a device back").size(16),
+        text(
+            "Step 2 of 2: pairing works both ways. After the other device scans the QR, \
+             open Fauxx on it to show ITS pairing code, then paste that code here so this \
+             device pairs it back. Both directions are required before devices can sync."
+        )
+        .size(11),
+    ]
+    .spacing(8);
+
+    let input = text_input("Paste the other device's pairing code", pair_back_input)
+        .on_input(Message::DevicePairBackChanged)
+        .padding(8)
+        .width(Length::Fill);
+    col = col.push(input);
+
+    let can_submit = !busy && !pair_back_input.trim().is_empty();
+    let pair_button = button(text(if busy {
+        "Pairing..."
+    } else {
+        "Pair this device"
+    }))
+    .on_press_maybe(can_submit.then_some(Message::DevicePairBack))
+    .padding(8);
+    col = col.push(pair_button);
+
+    if let Some(note) = pair_back_note {
+        col = col.push(text(note.to_owned()).size(11));
+    }
+
+    container(col)
+        .padding(12)
+        .width(Length::Fill)
         .style(crate::style::panel)
         .into()
 }
