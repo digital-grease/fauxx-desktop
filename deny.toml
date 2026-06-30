@@ -12,7 +12,8 @@ all-features = true
 version = 2
 # Fail on any known vulnerability or yanked crate.
 yanked = "deny"
-# Ignored advisories are all UNMAINTAINED (not vulnerabilities) on TRANSITIVE
+# Ignored advisories are either UNMAINTAINED (not vulnerabilities), or a
+# vulnerability whose code path is NOT REACHABLE in our usage, on TRANSITIVE
 # deps we cannot replace without dropping a capability, each documented:
 ignore = [
     # The gtk-rs GTK3 family + proc-macro-error below are UNMAINTAINED (not
@@ -43,6 +44,20 @@ ignore = [
     # source is target-gated to macOS+Windows, and `mach` is macOS-only), and the
     # query is read-only. Cannot be dropped without forking user-idle off `mach`.
     "RUSTSEC-2020-0168",
+    # `lopdf` (0.39.0): a stack-overflow DoS in the PDF PARSER (`Document::load_mem`
+    # and the other `load*` entry points) on deeply nested arrays/dicts in
+    # UNTRUSTED PDF input. NOT a vulnerability for us: the parser is never reached.
+    # lopdf is pulled only transitively by `printpdf =0.9.1`, and our sole printpdf
+    # use is WRITE-ONLY PDF generation in
+    # `crates/fauxx-core/src/measurement/export.rs`
+    # (`PdfDocument::new(...).with_pages(...).save(...)`); nothing in the workspace
+    # parses or loads a PDF (no `load_mem`/`Reader`/parse call exists, and the
+    # printpdf save path serializes via lopdf's writer, never its parser). printpdf
+    # 0.9.1 hard-requires lopdf `^0.39.0`, and no published printpdf release (nor
+    # its upstream main) yet uses lopdf >= 0.42.0 (the fixed version), so the crate
+    # cannot be bumped out today. REMOVE this entry once printpdf ships a release
+    # that pulls lopdf >= 0.42.0.
+    "RUSTSEC-2026-0187",
     # NOTE: the tokio broadcast unsoundness (RUSTSEC-2025-0023) is fixed by the
     # patched tokio pin (root Cargo.toml), not ignored.
 ]
