@@ -45,7 +45,8 @@ serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.150"
 # Typed library errors (core) vs flexible application errors (binaries).
 thiserror = "=1.0.69"
-anyhow = "=1.0.102"
+# 1.0.103+ fixes RUSTSEC-2026-0190 (unsound Error::downcast_mut after Error::context).
+anyhow = "=1.0.103"
 # Structured logging. The core emits via the `tracing` facade; the binaries
 # install the subscriber so both clients log identically.
 tracing = "=0.1.44"

@@ -58,6 +58,14 @@ ignore = [
     # cannot be bumped out today. REMOVE this entry once printpdf ships a release
     # that pulls lopdf >= 0.42.0.
     "RUSTSEC-2026-0187",
+    # `ttf-parser` (0.25.1): UNMAINTAINED (not a vulnerability; the author has
+    # declared it will receive no further fixes, maintained alternative is
+    # `skrifa`). No safe upgrade exists. Pulled transitively on the same chain as
+    # lopdf above (printpdf =0.9.1 -> lopdf 0.39.0 -> ttf-parser), for font handling
+    # in the write-only PDF export; cannot be dropped without replacing printpdf's
+    # font stack. REMOVE this entry if/when printpdf moves off ttf-parser (likely
+    # alongside the lopdf >= 0.42.0 bump above).
+    "RUSTSEC-2026-0192",
     # NOTE: the tokio broadcast unsoundness (RUSTSEC-2025-0023) is fixed by the
     # patched tokio pin (root Cargo.toml), not ignored.
 ]
