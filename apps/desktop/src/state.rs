@@ -74,9 +74,15 @@ pub enum AppState {
     Devices {
         /// The loaded sync snapshot, or `None` while the first load is pending.
         snapshot: Option<DevicesSnapshot>,
-        /// `true` while a Devices reload, mode change, or unpair is in flight,
-        /// so the view can show progress and coalesce redundant work.
+        /// `true` while a Devices reload, mode change, unpair, or pair-back is in
+        /// flight, so the view can show progress and coalesce redundant work.
         busy: bool,
+        /// The pairing code pasted into "Pair a device back" (issue #42
+        /// symmetric pairing). Transient UI state, cleared on a successful
+        /// pair-back.
+        pair_back_input: String,
+        /// The last pair-back status line, shown under the input.
+        pair_back_note: Option<String>,
     },
     /// The C4 #20 A1 efficacy dashboard: per-platform KL-divergence drift
     /// timelines and a per-category heatmap. Reached from [`AppState::Running`].

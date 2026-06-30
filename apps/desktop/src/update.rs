@@ -111,6 +111,8 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
             app.state = AppState::Devices {
                 snapshot: None,
                 busy: true,
+                pair_back_input: String::new(),
+                pair_back_note: None,
             };
             Task::perform(bg::load_devices(app.core.clone()), Message::DevicesLoaded)
         }
@@ -135,7 +137,7 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
         }
 
         Message::DevicesLoaded(result) => {
-            let AppState::Devices { snapshot, busy } = &mut app.state else {
+            let AppState::Devices { snapshot, busy, .. } = &mut app.state else {
                 // The user navigated away before the load resolved; drop it.
                 return Task::none();
             };
@@ -159,7 +161,7 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
         }
 
         Message::ModeSet(result) => {
-            let AppState::Devices { snapshot, busy } = &mut app.state else {
+            let AppState::Devices { snapshot, busy, .. } = &mut app.state else {
                 return Task::none();
             };
             *busy = false;
@@ -196,6 +198,69 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
                 Err(err) => {
                     *busy = false;
                     app.error_banner = Some(format!("Unpair failed: {err}"));
+                    Task::none()
+                }
+            }
+        }
+
+        Message::DevicePairBackChanged(text) => {
+            if let AppState::Devices {
+                pair_back_input, ..
+            } = &mut app.state
+            {
+                *pair_back_input = text;
+            }
+            Task::none()
+        }
+
+        Message::DevicePairBack => {
+            let AppState::Devices {
+                busy,
+                pair_back_input,
+                pair_back_note,
+                ..
+            } = &mut app.state
+            else {
+                return Task::none();
+            };
+            if *busy {
+                return Task::none();
+            }
+            let payload = pair_back_input.trim().to_string();
+            if payload.is_empty() {
+                *pair_back_note =
+                    Some("Paste the pairing code from the other device first.".to_string());
+                return Task::none();
+            }
+            *busy = true;
+            *pair_back_note = None;
+            Task::perform(
+                bg::pair_back(app.core.clone(), payload),
+                Message::DevicePairedBack,
+            )
+        }
+
+        Message::DevicePairedBack(result) => {
+            let AppState::Devices {
+                busy,
+                pair_back_input,
+                pair_back_note,
+                ..
+            } = &mut app.state
+            else {
+                return Task::none();
+            };
+            match result {
+                // Clear the input and reload so the newly paired device shows in
+                // the peer list. `busy` stays set until that reload resolves.
+                Ok(note) => {
+                    *pair_back_input = String::new();
+                    *pair_back_note = Some(note);
+                    Task::perform(bg::load_devices(app.core.clone()), Message::DevicesLoaded)
+                }
+                Err(err) => {
+                    *busy = false;
+                    *pair_back_note = Some(format!("Pairing failed: {err}"));
                     Task::none()
                 }
             }
@@ -1415,7 +1480,8 @@ mod tests {
                 app.state,
                 AppState::Devices {
                     snapshot: None,
-                    busy: true
+                    busy: true,
+                    ..
                 }
             ),
             "OpenDevices must switch to a loading Devices screen"
@@ -1428,6 +1494,8 @@ mod tests {
         app.state = AppState::Devices {
             snapshot: None,
             busy: true,
+            pair_back_input: String::new(),
+            pair_back_note: None,
         };
         let _ = update(&mut app, Message::DevicesLoaded(Err("boom".to_string())));
         // The screen is kept (non-fatal); the busy flag clears; the error shows
@@ -1581,6 +1649,124 @@ mod tests {
                 assert!(busy, "selecting a device starts a reload");
             }
             _ => panic!("must stay on the Dashboard"),
+        }
+    }
+
+    /// A Devices screen with the given pair-back state, for the #42 symmetric-
+    /// pairing reducer tests.
+    fn devices_state(busy: bool, input: &str) -> AppState {
+        AppState::Devices {
+            snapshot: None,
+            busy,
+            pair_back_input: input.to_string(),
+            pair_back_note: None,
+        }
+    }
+
+    #[test]
+    fn device_pair_back_changed_updates_the_input() {
+        // #42: typing in the "Pair a device back" field records the payload.
+        let mut app = app();
+        app.state = devices_state(false, "");
+        let _ = update(
+            &mut app,
+            Message::DevicePairBackChanged("code-123".to_string()),
+        );
+        match &app.state {
+            AppState::Devices {
+                pair_back_input, ..
+            } => assert_eq!(pair_back_input, "code-123"),
+            other => panic!(
+                "must stay on Devices, got {:?}",
+                std::mem::discriminant(other)
+            ),
+        }
+    }
+
+    #[test]
+    fn device_pair_back_with_blank_input_sets_a_hint_and_stays_idle() {
+        // #42: submitting an empty/whitespace payload must not start work; it
+        // nudges the user to paste a code instead.
+        let mut app = app();
+        app.state = devices_state(false, "   ");
+        let _ = update(&mut app, Message::DevicePairBack);
+        match &app.state {
+            AppState::Devices {
+                busy,
+                pair_back_note,
+                ..
+            } => {
+                assert!(!busy, "a blank submit must not set busy");
+                assert!(
+                    pair_back_note
+                        .as_deref()
+                        .unwrap_or_default()
+                        .contains("Paste"),
+                    "note should prompt for a code, got {pair_back_note:?}"
+                );
+            }
+            other => panic!(
+                "must stay on Devices, got {:?}",
+                std::mem::discriminant(other)
+            ),
+        }
+    }
+
+    #[test]
+    fn device_paired_back_ok_clears_input_and_notes_success() {
+        // #42: a successful pair-back clears the field and shows the summary; the
+        // screen stays busy while it reloads to show the new peer.
+        let mut app = app();
+        app.state = devices_state(true, "some-code");
+        let _ = update(
+            &mut app,
+            Message::DevicePairedBack(Ok("Paired Phone (ab:cd).".to_string())),
+        );
+        match &app.state {
+            AppState::Devices {
+                pair_back_input,
+                pair_back_note,
+                ..
+            } => {
+                assert!(pair_back_input.is_empty(), "input must clear on success");
+                assert_eq!(pair_back_note.as_deref(), Some("Paired Phone (ab:cd)."));
+            }
+            other => panic!(
+                "must stay on Devices, got {:?}",
+                std::mem::discriminant(other)
+            ),
+        }
+    }
+
+    #[test]
+    fn device_paired_back_err_sets_note_and_clears_busy() {
+        // #42: a failed pair-back surfaces the reason inline and re-enables the
+        // control (busy clears) so the user can correct the code.
+        let mut app = app();
+        app.state = devices_state(true, "bad-code");
+        let _ = update(
+            &mut app,
+            Message::DevicePairedBack(Err("invalid pairing payload".to_string())),
+        );
+        match &app.state {
+            AppState::Devices {
+                busy,
+                pair_back_note,
+                ..
+            } => {
+                assert!(!busy, "busy must clear on failure");
+                assert!(
+                    pair_back_note
+                        .as_deref()
+                        .unwrap_or_default()
+                        .contains("invalid pairing payload"),
+                    "note should carry the failure reason, got {pair_back_note:?}"
+                );
+            }
+            other => panic!(
+                "must stay on Devices, got {:?}",
+                std::mem::discriminant(other)
+            ),
         }
     }
 }

@@ -626,6 +626,27 @@ pub async fn import_phone_persona(core: Core, payload: String) -> Result<String,
     ))
 }
 
+/// Pair a device back from the Devices view by its pasted pairing-payload
+/// string (issue #42 symmetric pairing). LAN-sync pairing is per-device: after
+/// the phone scans this device's QR, the user pastes the phone's pairing code
+/// here so this device pairs it back. Only then can this device authenticate
+/// (and accept) inbound pushes from that peer. Returns a short human summary, or
+/// `Err` on a malformed or failed payload.
+pub async fn pair_back(core: Core, payload: String) -> Result<String, String> {
+    let trimmed = payload.trim();
+    if trimmed.is_empty() {
+        return Err("paste the pairing code from the other device first".to_string());
+    }
+    let peer = core
+        .complete_pairing(trimmed)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(format!(
+        "Paired {} ({}). This device can now sync with it.",
+        peer.name, peer.fingerprint
+    ))
+}
+
 /// Persist the first-run-completed marker (off the GUI thread). Infallible from
 /// the caller's view: a write failure is logged inside, not surfaced.
 pub async fn mark_first_run_complete() {
