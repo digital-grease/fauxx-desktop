@@ -162,17 +162,22 @@ jobs:
           TAG: ${{ steps.meta.outputs.tag }}
         run: |
           set -euo pipefail
-          # dist's release.yml runs in parallel; poll up to ~15 min for the Release
-          # so this never races ahead of it and creates a notes-less duplicate.
-          for i in $(seq 1 30); do
+          # dist's release.yml runs in parallel off the SAME tag, and it does not
+          # publish the Release until the very END of its full build+sign+host run
+          # (observed ~26 min: e.g. v0.2.1 published 25m36s after the tag push).
+          # This job's own build finishes far sooner, so it must out-wait the rest
+          # of dist's run. Poll generously (up to ~40 min) rather than racing ahead
+          # and creating a notes-less duplicate; `gh release view <tag>` only
+          # succeeds once dist PUBLISHES (a draft is not visible by tag).
+          for i in $(seq 1 40); do
             if gh release view "$TAG" >/dev/null 2>&1; then
               echo "Release $TAG exists; uploading."
               gh release upload "$TAG" \
                 "$OUTPUT" "$OUTPUT.zsync" "$OUTPUT.sha256" --clobber
               exit 0
             fi
-            echo "Release $TAG not published yet ($i/30); waiting 30s..."
-            sleep 30
+            echo "Release $TAG not published yet ($i/40); waiting 60s..."
+            sleep 60
           done
-          echo "::error::Release $TAG did not appear within 15 minutes; AppImage not attached." >&2
+          echo "::error::Release $TAG did not appear within 40 minutes; AppImage not attached." >&2
           exit 1
