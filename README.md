@@ -56,6 +56,18 @@ You can also verify provenance with `gh attestation verify <file> --repo digital
 
 An installer script (`*-installer.sh` / `*-installer.ps1`) is also attached; it verifies the archive checksum for you. Download it, review it, then run it as a local file (do not pipe it into a shell). Until code-signing certificates are provisioned, the binaries are unsigned, so macOS Gatekeeper and Windows SmartScreen will warn on first launch.
 
+### Linux: AppImage
+
+The desktop GUI is also published as a portable `Fauxx_Desktop_Companion-<version>-x86_64.AppImage` (with a matching `.zsync` for delta updates and a `.sha256` checksum). Download it, verify the checksum, make it executable, and run it, no installation or store needed:
+
+```sh
+sha256sum -c Fauxx_Desktop_Companion-*-x86_64.AppImage.sha256
+chmod +x Fauxx_Desktop_Companion-*-x86_64.AppImage
+./Fauxx_Desktop_Companion-*-x86_64.AppImage
+```
+
+The AppImage carries update information, so tools like [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher) and AppImageUpdate can integrate it and update it in place. It bundles the app's own libraries but uses your system's GPU drivers and Chromium at run time, so a system-installed Chromium is still required for the decoy browser.
+
 ## Build
 
 Requires Rust (see [`rust-toolchain.toml`](./rust-toolchain.toml)). All dependencies are version-pinned in the workspace.
