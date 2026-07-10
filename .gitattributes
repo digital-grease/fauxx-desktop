@@ -1,0 +1,15 @@
+# Line-ending policy. This repo is developed on Linux (LF). The GitHub Windows
+# runners check out with core.autocrlf=true, which would rewrite tracked bytes
+# to CRLF on Windows. For files whose EXACT bytes we depend on, that rewrite is
+# a bug, so pin them to LF on every platform.
+#
+# Most critically: `device_templates.json` is embedded via include_str! and its
+# SHA-256 is pinned and asserted on BOTH the Rust and Kotlin sides (#47). A CRLF
+# checkout changes those bytes, so the checksum test fails on Windows only (as it
+# did in CI). Forcing LF keeps the embedded bytes, and therefore the cross-repo
+# hash, identical everywhere. The interop golden vector and the other embedded
+# JSON corpora are pinned for the same byte-stability reason.
+*.json text eol=lf
+
+# JSON Lines fixtures/journals share the same requirement.
+*.jsonl text eol=lf
