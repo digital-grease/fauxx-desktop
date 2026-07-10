@@ -72,9 +72,10 @@ pub use brokers::{
     OptOutMethod, RelistOutcome, RequiredField, SnapshotDiff, StaticListingCheck, SubmissionStatus,
 };
 pub use browser::{
-    decoy_dir_for, decoy_profiles_root, parse_gpc_well_known, AssignedTopic, BrowserLaunchConfig,
-    BrowsingCadence, DecoyBrowser, DecoyPage, GpcSupport, SeedOutcome, TopicsReadback,
-    DEFAULT_CHROMIUM_PATH, GPC_WELL_KNOWN_PATH,
+    decoy_dir_for, decoy_profiles_root, desktop_for, device_templates_sha256, devices_for,
+    mobile_for, parse_gpc_well_known, AssignedTopic, Brand, BrowserLaunchConfig, BrowsingCadence,
+    DecoyBrowser, DecoyPage, DeviceProfile, FormFactor, GpcSupport, PresentedDevice, SeedOutcome,
+    TopicsReadback, DEFAULT_CHROMIUM_PATH, DEVICE_TEMPLATES_JSON, GPC_WELL_KNOWN_PATH,
 };
 pub use campaigns::{
     directive_for_gap, Campaign, CampaignDirective, CampaignPlanner, CampaignProgress,
@@ -1358,6 +1359,39 @@ impl Core {
         config: BrowserLaunchConfig,
     ) -> Result<DecoyBrowser> {
         DecoyBrowser::launch_with(decoy_id, config).await
+    }
+
+    /// The stable DESKTOP [`DeviceProfile`] a persona presents on the decoy browser
+    /// (#47): the derived User-Agent + client hints + fixed screen/navigator values,
+    /// computed deterministically from the persona (id + createdAt). Byte-identical
+    /// to what the paired phone derives for the same persona, without the device ever
+    /// crossing the LAN wire. Pure; needs no store.
+    pub fn desktop_device_for(&self, persona: &SyntheticPersona) -> DeviceProfile {
+        browser::desktop_for(persona)
+    }
+
+    /// The desktop device identity a STORED persona presents (#47): loads the persona
+    /// and derives [`Core::desktop_device_for`]. Errors if the persona is unknown or
+    /// no store is attached.
+    pub async fn desktop_device_for_id(&self, persona_id: &str) -> Result<DeviceProfile> {
+        let persona = self.get_persona(persona_id).await?;
+        Ok(browser::desktop_for(&persona))
+    }
+
+    /// Launch an isolated decoy browser bound to `persona`'s stable DESKTOP device
+    /// identity (#47): derives [`browser::desktop_for`] and applies it
+    /// (UA + full client hints + screen/navigator) to every page over CDP, so the
+    /// decoy presents one coherent, non-headless desktop device for the persona's
+    /// life. Same R3 isolation guardrail as [`Core::launch_decoy_browser`]; the
+    /// caller-supplied `config`'s other settings (egress, GPC, headed mode) are
+    /// preserved, only the device is bound.
+    pub async fn launch_decoy_browser_for_persona(
+        &self,
+        decoy_id: &str,
+        persona: &SyntheticPersona,
+        config: BrowserLaunchConfig,
+    ) -> Result<DecoyBrowser> {
+        DecoyBrowser::launch_with(decoy_id, config.with_persona_device(persona)).await
     }
 
     // --- Privacy Sandbox Topics read-back / closed loop (C2 #12 R2) ---------

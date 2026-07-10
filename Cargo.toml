@@ -101,6 +101,11 @@ argon2 = "=0.5.3"
 chacha20poly1305 = "=0.10.1"
 # Explicit zeroize of decrypted key material.
 zeroize = "=1.8.2"
+# Pure-Rust SHA-256 for the per-persona device-identity derivation (#47): the
+# portable, counter-based `pick` primitive shared byte-for-byte with the Android
+# app (fauxx#242). Already in the graph transitively (RustCrypto); pinned here to
+# the resolved version so making it a direct dep adds no new edge.
+sha2 = "=0.10.9"
 # Persona ids (UUID v4) for the persona model that mirrors the Android
 # SyntheticPersona.
 uuid = { version = "=1.23.3", features = ["v4", "serde"] }

@@ -19,8 +19,8 @@
 //! `Clone` because iced 0.14 requires it, so every payload here is owned.
 
 use fauxx_core::{
-    BrokerDiffTimeline, Campaign, Comparator, CoordinationMode, DiscoveredPeer, DnsStrategy,
-    Egress, EgressExit, Finding, InstalledPack, PairedPeer, PairingQr, PersonaField,
+    BrokerDiffTimeline, Campaign, Comparator, CoordinationMode, DeviceProfile, DiscoveredPeer,
+    DnsStrategy, Egress, EgressExit, Finding, InstalledPack, PairedPeer, PairingQr, PersonaField,
     PersonaSettings, PlatformDrift, RotationSchedule, SimulatedWeek, Status, SyntheticPersona,
 };
 
@@ -358,6 +358,15 @@ pub struct PersonaDetail {
     pub week: SimulatedWeek,
     /// The seed the preview week was rolled with (re-rollable).
     pub seed: u64,
+    /// The persona's stable DESKTOP device identity (#47): the UA + client hints
+    /// this companion presents on the decoy browser, derived deterministically
+    /// from the persona. Read-only in the editor (it is a pure function of the
+    /// persona id + creation time, not a stored, editable field).
+    pub desktop_device: DeviceProfile,
+    /// The persona's paired MOBILE device identity (#47): what the phone presents
+    /// for the same persona. Shown alongside the desktop one so the coherent
+    /// phone-plus-laptop pair is visible; never emitted by this companion.
+    pub mobile_device: DeviceProfile,
 }
 
 /// A point-in-time view of the C4 #22 A3 broker-diff surface. Owned and `Clone`

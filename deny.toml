@@ -66,6 +66,19 @@ ignore = [
     # font stack. REMOVE this entry if/when printpdf moves off ttf-parser (likely
     # alongside the lopdf >= 0.42.0 bump above).
     "RUSTSEC-2026-0192",
+    # `quick-xml` (0.39.4): two DoS advisories that BOTH require parsing
+    # ATTACKER-CONTROLLED XML — 0194 is quadratic time on a start tag with many
+    # duplicate attribute names, 0195 is unbounded namespace-declaration allocation
+    # in `NsReader`. NOT REACHABLE in our usage: quick-xml is pulled only by
+    # `wayland-scanner` (rfd -> ashpd -> wayland-client -> wayland-scanner), the
+    # Linux GUI file-dialog stack, where it parses the FIXED, TRUSTED Wayland
+    # protocol XML at BUILD TIME to generate code — never runtime or user input. No
+    # shipped binary feeds it untrusted XML, and the headless core/CLI do not pull it
+    # at all. It also cannot be bumped to the fixed 0.41.0: `wayland-scanner 0.31.10`
+    # pins quick-xml `^0.39`, so the upgrade waits on a wayland-scanner release (and
+    # the rfd/ashpd chain) moving to 0.41. REMOVE both once that lands.
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
     # NOTE: the tokio broadcast unsoundness (RUSTSEC-2025-0023) is fixed by the
     # patched tokio pin (root Cargo.toml), not ignored.
 ]

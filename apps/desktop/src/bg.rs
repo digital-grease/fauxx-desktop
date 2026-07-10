@@ -264,15 +264,22 @@ async fn load_persona_detail(
         .persona_settings(persona_id)
         .await
         .map_err(|e| e.to_string())?;
-    // The linter and simulator are pure functions of the persona (no store).
+    // The linter, simulator, and device derivation are pure functions of the
+    // persona (no store). The desktop device is the identity this companion
+    // presents on the decoy; the mobile one is the paired phone's, shown for
+    // context — both derive byte-identically on either platform (#47).
     let findings = core.lint_persona(&persona);
     let week = core.simulate_week(&persona, IntensityLevel::Medium, seed);
+    let desktop_device = core.desktop_device_for(&persona);
+    let mobile_device = fauxx_core::mobile_for(&persona);
     Ok(PersonaDetail {
         persona,
         settings,
         findings,
         week,
         seed,
+        desktop_device,
+        mobile_device,
     })
 }
 

@@ -69,6 +69,14 @@ base64 = { workspace = true }
 # Also seeds the persona-derived browsing cadence (dwell/scroll) in `browser`.
 rand = { workspace = true }
 
+# --- Per-persona device identity (#47) ---
+# Pure-Rust SHA-256 backing the portable, counter-based `pick` primitive that
+# derives a persona's stable device identity. The hash + canonical byte layout is
+# shared verbatim with the Android app (fauxx#242) so both platforms compute
+# byte-identical devices from the same persona WITHOUT syncing the device over
+# the wire. Pinned in the root [workspace.dependencies] per the house convention.
+sha2 = { workspace = true }
+
 # --- Real-browser integration (C2 #11 R1 / #13 R3) ---
 # Drive a dedicated, isolated decoy Chromium profile over CDP. Default features
 # = [bytes] only: the `fetcher` (browser auto-download) and its `native-tls` are

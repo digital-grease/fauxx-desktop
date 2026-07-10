@@ -33,8 +33,8 @@
 
 use fauxx_core::persona::{AgeRange, CategoryPool, Profession, Region};
 use fauxx_core::{
-    Finding, PersonaField, PersonaSettings, RotationSchedule, Severity, SimulatedWeek,
-    SyntheticPersona,
+    DeviceProfile, Finding, PersonaField, PersonaSettings, RotationSchedule, Severity,
+    SimulatedWeek, SyntheticPersona,
 };
 use iced::widget::{
     button, canvas, checkbox, column, container, pick_list, row, scrollable, text, text_input,
@@ -194,6 +194,7 @@ fn persona_row(persona: &SyntheticPersona, selected: bool, busy: bool) -> Elemen
 fn detail_column<'a>(detail: &'a PersonaDetail, busy: bool) -> Element<'a, Message> {
     column![
         editor_panel(detail, busy),
+        device_panel(&detail.desktop_device, &detail.mobile_device),
         rotation_panel(&detail.settings, busy),
         linter_panel(&detail.findings),
         simulator_panel(&detail.week, detail.seed, busy),
@@ -263,6 +264,106 @@ fn editor_panel<'a>(detail: &'a PersonaDetail, busy: bool) -> Element<'a, Messag
         .width(Length::Fill)
         .style(crate::style::panel)
         .into()
+}
+
+/// The #47 DESKTOP-DEVICE panel: a READ-ONLY view of the coherent desktop
+/// identity (UA + client hints + screen/navigator) this companion presents on
+/// the decoy browser for the selected persona, plus a compact summary of the
+/// paired phone's mobile identity. It is deliberately not editable: the identity
+/// is a pure function of the persona (id + creation time), so both platforms
+/// derive the same bytes and nothing crosses the LAN wire. Adjusting it would
+/// mean editing the persona, not the device.
+fn device_panel<'a>(desktop: &DeviceProfile, mobile: &DeviceProfile) -> Element<'a, Message> {
+    let caption = text(
+        "Derived deterministically from this persona and stable for its life \
+         (only slow Chrome auto-update drift). The paired phone derives the same \
+         set, so the device never crosses the LAN wire, and it never carries a \
+         HeadlessChrome tell.",
+    )
+    .size(11)
+    .style(|t: &iced::Theme| crate::style::text_in(crate::style::muted_color(t)));
+
+    let screen = format!(
+        "{} x {} @ {}x",
+        desktop.screen_width, desktop.screen_height, desktop.device_pixel_ratio
+    );
+    let model = if desktop.model.is_empty() {
+        "(desktop reports no model)".to_string()
+    } else {
+        desktop.model.clone()
+    };
+    let arch = format!("{}, {}-bit", desktop.architecture(), desktop.bitness());
+    let legacy_platform = desktop
+        .navigator_platform()
+        .unwrap_or("(unset)")
+        .to_string();
+
+    let desktop_rows = column![
+        device_kv("User agent", desktop.user_agent.clone()),
+        device_kv("Platform", desktop.platform.clone()),
+        device_kv("Platform ver.", desktop.platform_version.clone()),
+        device_kv("navigator.platform", legacy_platform),
+        device_kv("Model", model),
+        device_kv("Screen", screen),
+        device_kv("CPU cores", desktop.hardware_concurrency.to_string()),
+        device_kv("Memory", format!("{} GB", desktop.device_memory)),
+        device_kv("Architecture", arch),
+        device_kv("Client hints", brands_summary(desktop)),
+    ]
+    .spacing(6);
+
+    // A compact, secondary summary of the phone's half of the same persona, so
+    // the coherent phone-plus-laptop pair is visible at a glance.
+    let phone = column![
+        text("Paired phone (this companion never emits it)").size(12),
+        device_kv(
+            "Device",
+            format!("{} {}", mobile.platform, mobile.model)
+                .trim()
+                .to_string()
+        ),
+        device_kv("User agent", mobile.user_agent.clone()),
+    ]
+    .spacing(4);
+
+    container(
+        column![
+            text("Desktop device").size(16),
+            caption,
+            desktop_rows,
+            phone,
+        ]
+        .spacing(10),
+    )
+    .padding(12)
+    .width(Length::Fill)
+    .style(crate::style::panel)
+    .into()
+}
+
+/// One read-only device attribute: a fixed-width label and a wrapping value. The
+/// value is `size 11` so a long UA string wraps within the panel rather than
+/// forcing horizontal scroll.
+fn device_kv(label: &'static str, value: String) -> Element<'static, Message> {
+    row![
+        text(format!("{label}:"))
+            .size(11)
+            .width(Length::Fixed(130.0)),
+        text(value).size(11).width(Length::Fill),
+    ]
+    .spacing(8)
+    .into()
+}
+
+/// The `Sec-CH-UA` brand list rendered as one readable line, e.g.
+/// `Chromium 142, Google Chrome 142, Not?A_Brand 24`.
+fn brands_summary(device: &DeviceProfile) -> String {
+    device
+        .brands
+        .iter()
+        .map(|b| format!("{} {}", b.name, b.version))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// An editable field row: a labeled text input plus a lock checkbox.
@@ -714,4 +815,84 @@ fn simulator_panel(week: &SimulatedWeek, seed: u64, busy: bool) -> Element<'_, M
 fn short_key(key: &str) -> String {
     let head: String = key.chars().take(12).collect();
     format!("signer {head}\u{2026}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fauxx_core::{desktop_for, mobile_for, simulate_week, IntensityLevel, PersonaSettings};
+
+    /// A day past the #47 Chrome-version baseline so the derived UA carries a
+    /// resolved, non-baseline major, exercising the substitution end to end.
+    const CREATED_AT: i64 = 1_768_262_400_000 + 40 * 24 * 60 * 60 * 1000;
+
+    fn persona() -> SyntheticPersona {
+        SyntheticPersona::new(
+            "11111111-1111-4111-8111-111111111111".to_string(),
+            "Test Persona".to_string(),
+            "AGE_35_44".to_string(),
+            "ENGINEER".to_string(),
+            "US_MIDWEST".to_string(),
+            vec!["TECHNOLOGY".to_string(), "FINANCE".to_string()],
+            CREATED_AT,
+            CREATED_AT + 7 * 24 * 60 * 60 * 1000,
+        )
+    }
+
+    fn detail() -> PersonaDetail {
+        let persona = persona();
+        PersonaDetail {
+            desktop_device: desktop_for(&persona),
+            mobile_device: mobile_for(&persona),
+            settings: PersonaSettings::default_for(&persona.id),
+            findings: Vec::new(),
+            week: simulate_week(&persona, IntensityLevel::Medium, 7),
+            seed: 7,
+            persona,
+        }
+    }
+
+    // iced has no headless renderer to assert pixels; these guard the
+    // view-construction logic against panics (mirrors the privacy smoke test).
+    #[test]
+    fn studio_renders_with_a_populated_detail_including_the_device_panel() {
+        let d = detail();
+        let snapshot = StudioSnapshot {
+            personas: vec![d.persona.clone()],
+            installed_packs: Vec::new(),
+            detail: Some(d),
+        };
+        let _ = view(Some(&snapshot), false);
+        // The no-detail and loading states must render too.
+        let empty = StudioSnapshot {
+            personas: Vec::new(),
+            installed_packs: Vec::new(),
+            detail: None,
+        };
+        let _ = view(Some(&empty), false);
+        let _ = view(None, true);
+    }
+
+    #[test]
+    fn device_panel_renders_desktop_and_paired_phone() {
+        let p = persona();
+        let _ = device_panel(&desktop_for(&p), &mobile_for(&p));
+    }
+
+    #[test]
+    fn brands_summary_joins_name_and_version_per_brand() {
+        let desktop = desktop_for(&persona());
+        let summary = brands_summary(&desktop);
+        // Every brand appears as "<name> <version>", comma-separated, in order.
+        let expected = desktop
+            .brands
+            .iter()
+            .map(|b| format!("{} {}", b.name, b.version))
+            .collect::<Vec<_>>()
+            .join(", ");
+        assert_eq!(summary, expected);
+        assert!(summary.contains("Google Chrome "));
+        // The panel surfaces the real device, never a headless tell.
+        assert!(!summary.contains("Headless"));
+    }
 }

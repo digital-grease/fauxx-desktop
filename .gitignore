@@ -27,3 +27,5 @@ target
 # Top-level docs only (anchored), so crate-level docs like
 # crates/fauxx-core/docs/ stay tracked.
 /docs/
+.devloop
+CLAUDE.md

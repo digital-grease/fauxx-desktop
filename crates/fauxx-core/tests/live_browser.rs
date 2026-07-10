@@ -33,7 +33,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use fauxx_core::browser::{categories, BrowserLaunchConfig, DecoyBrowser};
+use fauxx_core::browser::{categories, desktop_for, BrowserLaunchConfig, DecoyBrowser};
 use fauxx_core::persona::{AgeRange, CategoryPool, Profession, Region, SyntheticPersona};
 use fauxx_core::CoreError;
 
@@ -178,6 +178,120 @@ async fn live_isolated_launch_navigate_scroll_dwell_and_clean_shutdown(
         "Chromium child {pid} must be reaped after shutdown (no orphan)"
     );
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "needs /usr/bin/chromium; run with --ignored"]
+async fn live_desktop_device_identity_is_presented_and_headless_free(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // #47: a decoy bound to a persona's desktop device must PRESENT that identity to
+    // page JS over CDP — the derived UA, the client hints (navigator.userAgentData),
+    // and the fixed navigator/screen values — and it must NOT leak the headless
+    // `HeadlessChrome` token in either the UA string or the Sec-CH-UA brands.
+    assert!(
+        PathBuf::from(CHROMIUM).exists(),
+        "this live test requires the system Chromium at {CHROMIUM}"
+    );
+
+    let persona = test_persona();
+    let device = desktop_for(&persona);
+    // Sanity: the derived identity is itself clean before we even launch.
+    assert!(!device.user_agent.contains("HeadlessChrome"));
+    assert!(!device.is_mobile);
+
+    let tmp = tempfile::tempdir()?;
+    let config = BrowserLaunchConfig::new()
+        .with_executable(CHROMIUM)
+        .with_user_data_dir(tmp.path().join("decoy-device"))
+        .with_no_sandbox(true)
+        .with_persona_device(&persona);
+
+    let mut browser = DecoyBrowser::launch_with("live-device", config).await?;
+    let pid = browser
+        .child_pid()
+        .ok_or("launched Chromium should report a PID")?;
+    let page = browser.new_page().await?;
+    // Prefer a real HTTPS (secure) context so navigator.userAgentData client hints
+    // are exposed; fall back to a local data: page when the network is down (the UA
+    // + fixed navigator/screen overrides still apply there, only the client hints
+    // are gated to a secure context).
+    let secure = page.navigate("https://example.com/").await.is_ok();
+    if !secure {
+        page.navigate(LOCAL_FALLBACK_URL).await?;
+    }
+
+    let presented = page.read_presented_device().await?;
+
+    // 1) The critical guarantee: no headless tell in the UA or the Sec-CH-UA brands,
+    //    and the UA is exactly the derived one.
+    assert!(
+        !presented.leaks_headless(),
+        "decoy leaked a headless token: {presented:?}"
+    );
+    assert_eq!(
+        presented.user_agent, device.user_agent,
+        "decoy must present the derived UA"
+    );
+
+    // 2) The fixed navigator/screen values match the device profile (these apply in
+    //    any context; deviceMemory is injected by the decoy so it is set even on a
+    //    non-secure page).
+    assert_eq!(
+        presented.hardware_concurrency,
+        Some(f64::from(device.hardware_concurrency))
+    );
+    assert_eq!(
+        presented.device_memory,
+        Some(f64::from(device.device_memory))
+    );
+    assert_eq!(
+        presented.device_pixel_ratio,
+        Some(device.device_pixel_ratio)
+    );
+    assert_eq!(presented.screen_width, Some(device.screen_width as f64));
+    assert_eq!(presented.screen_height, Some(device.screen_height as f64));
+
+    // navigator.platform is the coherent LEGACY token (MacIntel/Win32/...), not the
+    // client-hint value, and not the real Linux host's token.
+    assert_eq!(
+        Some(presented.navigator_platform.as_str()),
+        device.navigator_platform(),
+        "navigator.platform must be the device's legacy token"
+    );
+
+    // 3) In a secure context, the client hints are coherent with the device.
+    if secure {
+        assert_eq!(
+            presented.ua_data_platform.as_deref(),
+            Some(device.platform.as_str())
+        );
+        assert_eq!(presented.ua_data_mobile, Some(false));
+        assert!(
+            presented
+                .ua_data_brands
+                .iter()
+                .any(|b| b == "Google Chrome"),
+            "client-hint brands should include the derived brands: {:?}",
+            presented.ua_data_brands
+        );
+    } else {
+        eprintln!("live device: non-secure fallback used; navigator.userAgentData not asserted");
+    }
+
+    browser.close().await?;
+    let mut reaped = false;
+    for _ in 0..50 {
+        if !pid_alive(pid) {
+            reaped = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    assert!(
+        reaped,
+        "Chromium child {pid} must be reaped after shutdown (no orphan)"
+    );
     Ok(())
 }
 

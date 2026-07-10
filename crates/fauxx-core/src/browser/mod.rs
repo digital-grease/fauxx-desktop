@@ -60,6 +60,7 @@
 
 pub mod cadence;
 pub mod categories;
+pub mod device;
 pub mod gpc;
 pub mod isolation;
 pub mod search;
@@ -69,6 +70,10 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use chromiumoxide::auth::Credentials;
+use chromiumoxide::cdp::browser_protocol::emulation::{
+    SetDeviceMetricsOverrideParams, SetHardwareConcurrencyOverrideParams,
+    SetUserAgentOverrideParams, UserAgentBrandVersion, UserAgentMetadata,
+};
 use chromiumoxide::cdp::browser_protocol::network::{
     EnableParams as NetworkEnableParams, Headers as NetworkHeaders, SetExtraHttpHeadersParams,
 };
@@ -83,6 +88,10 @@ use crate::persona::SyntheticPersona;
 pub use cadence::BrowsingCadence;
 pub use categories::{
     category_sites, seed_history_for_persona, sites_for_categories, sites_for_persona, SeedOutcome,
+};
+pub use device::{
+    desktop_for, device_templates_sha256, devices_for, mobile_for, Brand, DeviceProfile,
+    FormFactor, DEVICE_TEMPLATES_JSON,
 };
 pub use gpc::{parse_gpc_well_known, GpcSupport, GPC_WELL_KNOWN_PATH};
 pub use search::{run_search_session, SearchDispatch, SearchOutcome};
@@ -146,6 +155,15 @@ pub struct BrowserLaunchConfig {
     /// egress + SystemDefault DNS, so the standard launch is unchanged. The
     /// emitted args ride alongside the existing flags at launch.
     network: crate::network::PersonaNetwork,
+    /// The persona's stable DESKTOP device identity (#47), applied to every page
+    /// opened from this browser: the derived User-Agent + full client-hint metadata
+    /// over CDP, plus fixed screen/DPR and `navigator.hardwareConcurrency`/
+    /// `deviceMemory`. `None` (the default) leaves the browser's own UA untouched, so
+    /// a caller that does not bind a persona launches unchanged. When set, the UA is
+    /// also passed as the `--user-agent` launch arg so the `HeadlessChrome` token
+    /// never leaks even on the very first request. STABLE for the persona's life;
+    /// bound via [`with_device`](Self::with_device).
+    device: Option<device::DeviceProfile>,
 }
 
 impl BrowserLaunchConfig {
@@ -165,6 +183,9 @@ impl BrowserLaunchConfig {
             // Default network: Direct egress + SystemDefault DNS, so the standard
             // launch is unchanged until a persona's egress/DNS is bound (C7).
             network: crate::network::PersonaNetwork::default(),
+            // No device identity by default: the browser keeps its own UA until a
+            // persona's desktop device is bound (#47).
+            device: None,
         }
     }
 
@@ -230,6 +251,30 @@ impl BrowserLaunchConfig {
     pub fn with_network(mut self, network: crate::network::PersonaNetwork) -> Self {
         self.network = network;
         self
+    }
+
+    /// Bind this decoy launch to a persona's stable DESKTOP device identity (#47):
+    /// the derived User-Agent + full client-hint metadata, applied over CDP to every
+    /// page, plus the UA as the `--user-agent` launch arg. Passing a MOBILE profile
+    /// is a misuse (the companion drives real desktop TLS, so a mobile UA would be
+    /// incoherent, #168); prefer [`with_persona_device`](Self::with_persona_device),
+    /// which derives the correct desktop identity for you.
+    pub fn with_device(mut self, device: device::DeviceProfile) -> Self {
+        self.device = Some(device);
+        self
+    }
+
+    /// Bind this decoy launch to `persona`'s derived DESKTOP device identity (#47).
+    /// Convenience over [`with_device`](Self::with_device) that computes
+    /// [`device::desktop_for`] so callers never hand-pick a form factor: the desktop
+    /// companion only ever presents the DESKTOP identity.
+    pub fn with_persona_device(self, persona: &SyntheticPersona) -> Self {
+        self.with_device(device::desktop_for(persona))
+    }
+
+    /// The DESKTOP device identity bound to this launch, if any.
+    pub fn device(&self) -> Option<&device::DeviceProfile> {
+        self.device.as_ref()
     }
 
     /// Bind just the [`Egress`](crate::network::Egress) for this launch, leaving
@@ -361,6 +406,12 @@ pub struct DecoyBrowser {
     /// browser (D4c #18). Carried from the launch config so every
     /// [`new_page`](Self::new_page) applies it consistently.
     gpc_enabled: bool,
+    /// The persona's stable DESKTOP device identity (#47), applied to every page
+    /// opened from this browser: the UA + full client-hint metadata, screen/DPR, and
+    /// fixed navigator values, over CDP. Carried from the launch config so every
+    /// [`new_page`](Self::new_page) presents the SAME coherent device. `None` leaves
+    /// pages with the browser's own UA.
+    device: Option<device::DeviceProfile>,
     /// Proxy-auth credentials applied to every page opened from this browser
     /// (C7 #30), when the persona's egress uses an AUTHENTICATED proxy. `None`
     /// for Direct/Tor/unauthenticated egress. Redacted from `Debug`.
@@ -471,6 +522,7 @@ impl DecoyBrowser {
             handler_task: Some(handler_task),
             user_data_dir: decoy_dir,
             gpc_enabled: config.gpc_enabled,
+            device: config.device.clone(),
             proxy_credentials,
         })
     }
@@ -478,6 +530,12 @@ impl DecoyBrowser {
     /// Whether Global Privacy Control is emitted on pages from this browser.
     pub fn gpc_enabled(&self) -> bool {
         self.gpc_enabled
+    }
+
+    /// The persona's DESKTOP device identity applied to pages from this browser
+    /// (#47), if one was bound at launch.
+    pub fn device(&self) -> Option<&device::DeviceProfile> {
+        self.device.as_ref()
     }
 
     /// The dedicated decoy user-data directory this browser is running against.
@@ -517,6 +575,12 @@ impl DecoyBrowser {
             })?;
         }
         let decoy = DecoyPage { page };
+        // Apply the persona's stable DESKTOP device identity FIRST, before any
+        // navigation, so the very first request carries the coherent UA + client
+        // hints and never the headless default (#47).
+        if let Some(device) = &self.device {
+            decoy.apply_device(device).await?;
+        }
         if self.gpc_enabled {
             decoy.apply_gpc().await?;
         }
@@ -573,6 +637,49 @@ impl Drop for DecoyBrowser {
         if let Some(task) = self.handler_task.take() {
             task.abort();
         }
+    }
+}
+
+/// A read-only snapshot of the fingerprint-relevant values a decoy page presents to
+/// site scripts (#47), as observed via [`DecoyPage::read_presented_device`]. This is
+/// what a fingerprinting script actually sees, so it is the honest end-to-end check
+/// that the derived device identity is live and headless-free. Fields sourced from
+/// `navigator.userAgentData` are `None`/empty in a non-secure context.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PresentedDevice {
+    /// The effective `navigator.userAgent`.
+    pub user_agent: String,
+    /// The legacy `navigator.platform` token (`"MacIntel"` / `"Win32"` / ...).
+    pub navigator_platform: String,
+    /// `navigator.userAgentData.platform`, when exposed (secure context only).
+    pub ua_data_platform: Option<String>,
+    /// `navigator.userAgentData.mobile`, when exposed (secure context only).
+    pub ua_data_mobile: Option<bool>,
+    /// The `navigator.userAgentData.brands` brand NAMES, when exposed.
+    pub ua_data_brands: Vec<String>,
+    /// `navigator.hardwareConcurrency`.
+    pub hardware_concurrency: Option<f64>,
+    /// `navigator.deviceMemory` (secure context, but the decoy injects it regardless).
+    pub device_memory: Option<f64>,
+    /// `window.devicePixelRatio`.
+    pub device_pixel_ratio: Option<f64>,
+    /// `screen.width`.
+    pub screen_width: Option<f64>,
+    /// `screen.height`.
+    pub screen_height: Option<f64>,
+}
+
+impl PresentedDevice {
+    /// Whether any observed surface (the UA string or a `Sec-CH-UA` brand name) still
+    /// carries a headless tell. The whole point of the applied identity is that this
+    /// is `false`.
+    pub fn leaks_headless(&self) -> bool {
+        self.user_agent.contains("HeadlessChrome")
+            || self
+                .ua_data_brands
+                .iter()
+                .any(|b| b.contains("HeadlessChrome") || b.contains("HeadlessChromium"))
     }
 }
 
@@ -652,6 +759,166 @@ impl DecoyPage {
             "applied GPC to decoy page (Sec-GPC request header + navigator.globalPrivacyControl)"
         );
         Ok(())
+    }
+
+    /// Apply a persona's stable DESKTOP device identity to this page (#47).
+    ///
+    /// Four CDP commands, all applied before any navigation so they take effect on
+    /// the first request and are observable to the first document's scripts:
+    ///
+    /// - `Emulation.setUserAgentOverride` with the derived `userAgent` AND a full
+    ///   `userAgentMetadata` (brands, full-version list, platform, platformVersion,
+    ///   architecture, bitness, model, `mobile=false`). This drives BOTH the
+    ///   `User-Agent` header and the `Sec-CH-UA-*` client hints / `navigator.userAgentData`,
+    ///   so neither carries the headless default's `HeadlessChrome` brand.
+    /// - `Emulation.setDeviceMetricsOverride` pins `screen.*` and
+    ///   `window.devicePixelRatio` to the device's values.
+    /// - `Emulation.setHardwareConcurrencyOverride` pins `navigator.hardwareConcurrency`.
+    /// - `Page.addScriptToEvaluateOnNewDocument` fixes `navigator.deviceMemory` (which
+    ///   has no dedicated CDP override) before page scripts run, so a fingerprinting
+    ///   read sees the device-appropriate constant, not a varying value.
+    ///
+    /// The UA is STABLE for the persona's life; it changes only when the persona
+    /// rotates, so applying it once per page (never per action) matches a real
+    /// browser holding one identity.
+    pub(crate) async fn apply_device(&self, device: &device::DeviceProfile) -> Result<()> {
+        // UA + full client hints. Missing optional metadata fields would be filled by
+        // Chromium with its own (headless) defaults, so every field is set explicitly.
+        let brands: Vec<UserAgentBrandVersion> = device
+            .brands
+            .iter()
+            .map(|b| UserAgentBrandVersion::new(b.name.clone(), b.version.clone()))
+            .collect();
+        let full_version_list: Vec<UserAgentBrandVersion> = device
+            .full_version_brands()
+            .into_iter()
+            .map(|b| UserAgentBrandVersion::new(b.name, b.version))
+            .collect();
+        let metadata = UserAgentMetadata {
+            brands: Some(brands),
+            full_version_list: Some(full_version_list),
+            platform: device.platform.clone(),
+            platform_version: device.platform_version.clone(),
+            architecture: device.architecture().to_string(),
+            model: device.model.clone(),
+            mobile: device.is_mobile,
+            bitness: Some(device.bitness().to_string()),
+            wow64: Some(false),
+            form_factors: None,
+        };
+        let ua = SetUserAgentOverrideParams {
+            user_agent: device.user_agent.clone(),
+            accept_language: None,
+            // `navigator.platform` is the LEGACY token ("MacIntel"/"Win32"/...),
+            // distinct from the client-hint `userAgentData.platform` ("macOS"/...)
+            // above; setting the wrong one is itself a fingerprint tell.
+            platform: device.navigator_platform().map(str::to_string),
+            user_agent_metadata: Some(metadata),
+        };
+        self.page.execute(ua).await.map_err(|e| {
+            CoreError::Browser(format!("setting decoy user-agent override failed: {e}"))
+        })?;
+
+        // Screen dimensions + device pixel ratio. `width`/`height` are the viewport;
+        // pinning them to the screen size (with matching `screenWidth`/`screenHeight`)
+        // keeps `screen.*` and `devicePixelRatio` coherent with the claimed device on
+        // a headless target that has no real window.
+        let mut metrics = SetDeviceMetricsOverrideParams::new(
+            device.screen_width,
+            device.screen_height,
+            device.device_pixel_ratio,
+            device.is_mobile,
+        );
+        metrics.screen_width = Some(device.screen_width);
+        metrics.screen_height = Some(device.screen_height);
+        self.page.execute(metrics).await.map_err(|e| {
+            CoreError::Browser(format!("setting decoy device metrics override failed: {e}"))
+        })?;
+
+        // navigator.hardwareConcurrency (also honored by workers).
+        self.page
+            .execute(SetHardwareConcurrencyOverrideParams::new(i64::from(
+                device.hardware_concurrency,
+            )))
+            .await
+            .map_err(|e| {
+                CoreError::Browser(format!("setting decoy hardwareConcurrency failed: {e}"))
+            })?;
+
+        // navigator.deviceMemory has no dedicated CDP override; pin it with an
+        // early-injected property (same idiom as the GPC injection), before page
+        // scripts run, so a fingerprint read sees the device-appropriate constant.
+        let device_memory_js = format!(
+            "try {{ Object.defineProperty(navigator, 'deviceMemory', {{ \
+                value: {mem}, configurable: false, enumerable: true \
+             }}); }} catch (e) {{ try {{ navigator.deviceMemory = {mem}; }} catch (e2) {{}} }}",
+            mem = device.device_memory
+        );
+        self.page
+            .execute(AddScriptToEvaluateOnNewDocumentParams {
+                source: device_memory_js,
+                world_name: None,
+                include_command_line_api: None,
+                run_immediately: Some(true),
+            })
+            .await
+            .map_err(|e| {
+                CoreError::Browser(format!("injecting navigator.deviceMemory failed: {e}"))
+            })?;
+
+        tracing::debug!(
+            target: "fauxx_core::browser",
+            platform = %device.platform,
+            "applied desktop device identity to decoy page (UA + client hints + screen/navigator)"
+        );
+        Ok(())
+    }
+
+    /// Read the effective `navigator.userAgent` from this page (a read-only
+    /// observation; does not navigate). Used by the live device-identity test to
+    /// confirm the derived UA is presented and that no `HeadlessChrome` token leaks.
+    pub async fn read_navigator_user_agent(&self) -> Result<String> {
+        let result = self
+            .page
+            .evaluate("navigator.userAgent")
+            .await
+            .map_err(|e| CoreError::Browser(format!("reading navigator.userAgent failed: {e}")))?;
+        Ok(result.into_value::<String>().unwrap_or_default())
+    }
+
+    /// Read a snapshot of the fingerprint-relevant values this page actually
+    /// presents to site scripts (#47): the User-Agent, the `navigator.userAgentData`
+    /// client hints (platform / mobile / brand names), and the fixed
+    /// `hardwareConcurrency` / `deviceMemory` / `devicePixelRatio` / screen values.
+    ///
+    /// A read-only observation (does not navigate). This is what a fingerprinting
+    /// script would see, so it is the honest way to VERIFY the applied device
+    /// identity end-to-end — that the derived values are live and that no
+    /// `HeadlessChrome` token leaks in the UA or the brands. `navigator.userAgentData`
+    /// is only exposed in a secure context, so its fields are `None`/empty on a
+    /// non-secure page (e.g. a `data:` URL) even though the UA override still applies.
+    pub async fn read_presented_device(&self) -> Result<PresentedDevice> {
+        // One round-trip: evaluate an object literal and deserialize it. `?? null`
+        // guards engines/contexts where a field is absent so the read never throws.
+        let expr = "(() => { const d = navigator.userAgentData; return { \
+            userAgent: navigator.userAgent, \
+            navigatorPlatform: navigator.platform, \
+            uaDataPlatform: d ? d.platform : null, \
+            uaDataMobile: d ? d.mobile : null, \
+            uaDataBrands: d ? d.brands.map(b => b.brand) : [], \
+            hardwareConcurrency: navigator.hardwareConcurrency ?? null, \
+            deviceMemory: navigator.deviceMemory ?? null, \
+            devicePixelRatio: window.devicePixelRatio ?? null, \
+            screenWidth: screen.width ?? null, \
+            screenHeight: screen.height ?? null }; })()";
+        let result = self
+            .page
+            .evaluate(expr)
+            .await
+            .map_err(|e| CoreError::Browser(format!("reading presented device failed: {e}")))?;
+        result
+            .into_value::<PresentedDevice>()
+            .map_err(|e| CoreError::Browser(format!("parsing presented device failed: {e}")))
     }
 
     /// Read `navigator.globalPrivacyControl` from this page (a read-only
@@ -859,6 +1126,16 @@ fn build_browser_config(config: &BrowserLaunchConfig, decoy_dir: &Path) -> Resul
 
     if config.no_sandbox {
         builder = builder.arg("--no-sandbox");
+    }
+
+    if let Some(device) = &config.device {
+        // Pass the derived UA as the launch arg too (#47). `Emulation.setUserAgentOverride`
+        // (in `new_page`) is what carries the full client hints, but setting the
+        // browser-wide UA here guarantees the default `HeadlessChrome` token never
+        // leaks on any request — including any the browser issues before the first
+        // page override is applied. One DecoyBrowser is one persona, so a single
+        // browser-wide UA is coherent.
+        builder = builder.arg(format!("--user-agent={}", device.user_agent));
     }
 
     if config.topics_enabled {
