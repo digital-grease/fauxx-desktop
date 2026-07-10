@@ -1,0 +1,174 @@
+# Linux desktop packaging: AppImage (issue #43).
+#
+# This is a SIBLING workflow to release.yml on purpose. release.yml is generated
+# by `dist generate` and must not be hand-edited, and cargo-dist has no AppImage
+# support, so the AppImage is built here and attached to the SAME GitHub Release
+# that dist creates for the tag.
+#
+# Triggers:
+#   - a pushed `v*` tag  -> build the AppImage and upload it to the tag's Release
+#                           (waiting for dist's release.yml to create the Release
+#                           first, so dist stays the owner of the release notes).
+#   - workflow_dispatch  -> build the AppImage and upload it as a workflow
+#                           ARTIFACT only (a dry run; never touches a Release), so
+#                           the packaging can be validated without cutting a tag.
+#
+# Why build fresh on ubuntu-22.04 instead of reusing dist's binary: dist builds
+# the Linux binary on ubuntu-24.04 (glibc 2.39), which would make the AppImage
+# refuse to start on anything older. Building on 22.04 (glibc 2.35) gives a much
+# broader "runs on most current distros" floor, which is the whole point of an
+# AppImage.
+name: Linux packaging (AppImage)
+
+on:
+  push:
+    tags:
+      - "v*"
+  # Self-validate the AppImage build on any PR that touches the packaging assets
+  # or this workflow: builds the image as a downloadable artifact (never a
+  # Release), so a packaging change is proven before it merges.
+  pull_request:
+    paths:
+      - "packaging/linux/**"
+      - ".github/workflows/linux-packaging.yml"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to build for a dry run (defaults to the current branch). No Release is touched."
+        required: false
+
+permissions:
+  contents: write # upload the built AppImage to the tag's GitHub Release
+
+# The app-id and the AppImage output name are the cross-file contract: the .desktop
+# file, the icon filenames, the AppStream metainfo, and the zsync update-information
+# string all key off these, so define them once.
+env:
+  APP_ID: net.digitalgrease.FauxxDesktop
+  # linuxdeploy/appimagetool are themselves AppImages; extract-and-run avoids
+  # needing FUSE on the runner.
+  APPIMAGE_EXTRACT_AND_RUN: 1
+
+jobs:
+  appimage:
+    name: Build AppImage (x86_64, glibc 2.35 floor)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      # Same Linux GUI build deps as ci.yml's gui lane: iced/winit need
+      # libxkbcommon + wayland; the keystore's dbus-secret-service needs libdbus +
+      # pkg-config. The tray is ksni (pure Rust), so no GTK3/appindicator libs.
+      - name: Install GUI build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev libwayland-dev libdbus-1-dev pkg-config
+
+      # rust-toolchain.toml pins 1.96.0, which this respects.
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Resolve version + release mode
+        id: meta
+        run: |
+          if [ "${GITHUB_REF}" != "${GITHUB_REF#refs/tags/}" ]; then
+            tag="${GITHUB_REF#refs/tags/}"
+            echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+            echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            # Dry run: version-stamp from the short SHA so the artifact is named.
+            echo "tag=" >> "$GITHUB_OUTPUT"
+            echo "version=0.0.0-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build the desktop GUI binary
+        run: cargo build --release --locked --features gui -p fauxx-desktop
+
+      # Lay out a standard AppDir: binary in usr/bin, and the desktop entry, icon
+      # set, and AppStream metainfo in their FHS locations so desktop integration
+      # (menu entry, icon, AppImageLauncher/AppManager update discovery) works once
+      # the image is installed or integrated.
+      - name: Assemble AppDir
+        run: |
+          set -euo pipefail
+          APPDIR=AppDir
+          rm -rf "$APPDIR"
+          install -Dm755 target/release/fauxx-desktop "$APPDIR/usr/bin/fauxx-desktop"
+          install -Dm644 "packaging/linux/${APP_ID}.desktop" \
+            "$APPDIR/usr/share/applications/${APP_ID}.desktop"
+          install -Dm644 "packaging/linux/${APP_ID}.metainfo.xml" \
+            "$APPDIR/usr/share/metainfo/${APP_ID}.metainfo.xml"
+          for size in 16 32 48 64 128 256 512; do
+            install -Dm644 "packaging/linux/icons/hicolor/${size}x${size}/apps/${APP_ID}.png" \
+              "$APPDIR/usr/share/icons/hicolor/${size}x${size}/apps/${APP_ID}.png"
+          done
+
+      - name: Fetch linuxdeploy
+        run: |
+          curl -fsSL -o linuxdeploy \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy
+
+      # linuxdeploy bundles the app's shared-library deps (wayland/xkbcommon/dbus,
+      # etc.) but deliberately EXCLUDES host-provided libraries (libGL, Vulkan,
+      # libwayland-client, glibc, ...) per the AppImage excludelist, so the image
+      # uses the host's GPU drivers and compositor libs rather than shipping stale
+      # ones. UPDATE_INFORMATION makes appimagetool embed the update channel and
+      # emit the matching .zsync, satisfying AppImageUpdate / AppImageLauncher.
+      - name: Build the AppImage
+        run: |
+          set -euo pipefail
+          export VERSION="${{ steps.meta.outputs.version }}"
+          export OUTPUT="Fauxx_Desktop_Companion-${VERSION}-x86_64.AppImage"
+          export UPDATE_INFORMATION="gh-releases-zsync|digital-grease|fauxx-desktop|latest|Fauxx_Desktop_Companion-*-x86_64.AppImage.zsync"
+          ./linuxdeploy \
+            --appdir AppDir \
+            --executable target/release/fauxx-desktop \
+            --desktop-file "packaging/linux/${APP_ID}.desktop" \
+            --icon-file "packaging/linux/icons/hicolor/256x256/apps/${APP_ID}.png" \
+            --output appimage
+          ls -la ./*.AppImage ./*.zsync
+          sha256sum "$OUTPUT" | tee "$OUTPUT.sha256"
+          # Export the resolved filename so the upload steps below can reference it.
+          echo "OUTPUT=$OUTPUT" >> "$GITHUB_ENV"
+
+      # Dry run (workflow_dispatch): keep the image as a downloadable artifact so
+      # the packaging can be validated end to end without publishing anything.
+      - name: Upload AppImage artifact (dry run)
+        if: steps.meta.outputs.publish != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fauxx-desktop-appimage-${{ steps.meta.outputs.version }}
+          path: |
+            *.AppImage
+            *.AppImage.zsync
+            *.AppImage.sha256
+
+      # Tag build: attach to the Release that dist created for this tag. dist owns
+      # the release (notes, other assets), so wait for it to exist, then just add
+      # the AppImage + its zsync + checksum.
+      - name: Attach AppImage to the Release
+        if: steps.meta.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # dist's release.yml runs in parallel; poll up to ~15 min for the Release
+          # so this never races ahead of it and creates a notes-less duplicate.
+          for i in $(seq 1 30); do
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              echo "Release $TAG exists; uploading."
+              gh release upload "$TAG" \
+                "$OUTPUT" "$OUTPUT.zsync" "$OUTPUT.sha256" --clobber
+              exit 0
+            fi
+            echo "Release $TAG not published yet ($i/30); waiting 30s..."
+            sleep 30
+          done
+          echo "::error::Release $TAG did not appear within 15 minutes; AppImage not attached." >&2
+          exit 1

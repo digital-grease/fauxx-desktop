@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Fauxx Desktop Companion
+GenericName=Privacy Companion
+Comment=Generate realistic decoy web activity to pollute data-broker profiles
+Exec=fauxx-desktop
+Icon=net.digitalgrease.FauxxDesktop
+Terminal=false
+Categories=Network;Security;
+Keywords=privacy;tracking;data-broker;decoy;persona;topics;anti-fingerprinting;
+StartupNotify=true
+StartupWMClass=fauxx-desktop

@@ -29,3 +29,9 @@ target
 /docs/
 .devloop
 CLAUDE.md
+
+# Locally-built AppImage packaging artifacts (see packaging/linux/). The tracked
+# desktop/metainfo/icon assets stay; the built image + its staging dir do not.
+/AppDir/
+*.AppImage
+*.AppImage.zsync
