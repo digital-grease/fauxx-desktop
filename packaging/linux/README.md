@@ -12,12 +12,12 @@ filenames, and the AppImage `.zsync` update-information string.
 
 ## Contents
 
-- `net.digitalgrease.FauxxDesktop.desktop` — the desktop entry (`Exec=fauxx-desktop`).
+- `net.digitalgrease.FauxxDesktop.desktop`: the desktop entry (`Exec=fauxx-desktop`).
   Validated with `desktop-file-validate`.
-- `net.digitalgrease.FauxxDesktop.metainfo.xml` — AppStream metadata. Validated
+- `net.digitalgrease.FauxxDesktop.metainfo.xml`: AppStream metadata. Validated
   with `appstreamcli validate`. Drives the software-center/AppImage update
   metadata; add a `<release>` entry per version.
-- `icons/hicolor/<size>x<size>/apps/net.digitalgrease.FauxxDesktop.png` — the app
+- `icons/hicolor/<size>x<size>/apps/net.digitalgrease.FauxxDesktop.png`: the app
   icon at 16, 32, 48, 64, 128, 256, and 512 px.
 
 ## Icon provenance

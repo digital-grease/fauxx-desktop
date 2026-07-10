@@ -75,14 +75,18 @@ jobs:
         run: |
           if [ "${GITHUB_REF}" != "${GITHUB_REF#refs/tags/}" ]; then
             tag="${GITHUB_REF#refs/tags/}"
-            echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-            echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
-            echo "publish=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "tag=${tag}"
+              echo "version=${tag#v}"
+              echo "publish=true"
+            } >> "$GITHUB_OUTPUT"
           else
             # Dry run: version-stamp from the short SHA so the artifact is named.
-            echo "tag=" >> "$GITHUB_OUTPUT"
-            echo "version=0.0.0-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-            echo "publish=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "tag="
+              echo "version=0.0.0-${GITHUB_SHA::7}"
+              echo "publish=false"
+            } >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build the desktop GUI binary
