@@ -193,3 +193,148 @@ async fn unpaired_sender_frame_is_rejected_by_the_listener() -> Result<()> {
     );
     Ok(())
 }
+
+/// Extract the message from a `CoreError::Sync`, panicking on any other variant.
+fn sync_message(err: &CoreError) -> String {
+    match err {
+        CoreError::Sync(m) => m.clone(),
+        other => panic!("expected CoreError::Sync, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn rejection_when_not_paired_back_explains_both_ways_pairing() -> Result<()> {
+    // #42 D2 (the #38 scenario): the phone (sender) scanned and paired the
+    // desktop (receiver), but the desktop never paired the phone back. The
+    // desktop must reject the phone's push with a clear, actionable both-ways
+    // message rather than a bare auth failure.
+    let sender_dir = tempfile::tempdir()?;
+    let receiver_dir = tempfile::tempdir()?;
+    let sender = open_core(sender_dir.path(), "Phone", 46_111).await?;
+    let receiver = open_core(receiver_dir.path(), "Desktop", 46_112).await?;
+
+    // One-way pairing: the phone pairs the desktop; the desktop does NOT pair back.
+    let recv_payload = receiver.pairing_payload().await?.encode()?;
+    sender.complete_pairing(&recv_payload).await?;
+
+    let persona = SyntheticPersona::new(
+        "cccccccc-cccc-4ccc-8ccc-cccccccccccc".to_string(),
+        "Push".to_string(),
+        "AGE_35_44".to_string(),
+        "TEACHER".to_string(),
+        "CANADA".to_string(),
+        vec!["ACADEMIC".to_string(), "HISTORY".to_string()],
+        1_700_000_000_000,
+        1_800_000_000_000,
+    );
+    let sealed = sender
+        .seal_persona_for(&receiver.sync_public_key()?, &persona)
+        .await?;
+
+    // Case A: the receiver has NO paired peers at all -> the "no paired device"
+    // branch, with the both-ways remediation hint.
+    let Err(err) = receiver.ingest_inbound_frame(&sealed).await else {
+        panic!("a not-paired-back push must be rejected");
+    };
+    let msg = sync_message(&err);
+    assert!(
+        msg.contains("BOTH"),
+        "rejection must explain both-ways pairing, got: {msg}"
+    );
+    assert!(
+        msg.contains("pair add") && msg.contains("Devices"),
+        "rejection must point to the GUI/CLI fix, got: {msg}"
+    );
+    // The bare pre-#42 wording must be gone.
+    assert!(
+        !msg.contains("nothing can authenticate it. inbound"),
+        "must not be the bare auth failure, got: {msg}"
+    );
+
+    // Case B: the receiver has paired a DIFFERENT device, so the attribution loop
+    // runs but nothing authenticates -> the "not paired the sender back" branch.
+    let other_dir = tempfile::tempdir()?;
+    let other = open_core(other_dir.path(), "Tablet", 46_113).await?;
+    let other_payload = other.pairing_payload().await?.encode()?;
+    receiver.complete_pairing(&other_payload).await?;
+
+    let Err(err2) = receiver.ingest_inbound_frame(&sealed).await else {
+        panic!("a push from a peer not paired back must be rejected");
+    };
+    let msg2 = sync_message(&err2);
+    assert!(
+        msg2.contains("paired the sender back") && msg2.contains("BOTH"),
+        "rejection must explain the sender was not paired back, got: {msg2}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn manual_numeric_ip_push_works_without_mdns() -> Result<()> {
+    // #42 D3: when mDNS discovery is blocked (a VPN/proxy app, or a guest /
+    // client-isolated Wi-Fi), a push must still work via a manually entered
+    // numeric IP. The receiver binds by address and authenticates by key, so a
+    // frame delivered to a numeric host (no discovery) is accepted exactly like a
+    // discovered one, as long as the peer is paired both ways.
+    let sender_dir = tempfile::tempdir()?;
+    let receiver_dir = tempfile::tempdir()?;
+    let sender = open_core(sender_dir.path(), "Sender", 46_121).await?;
+    let receiver = open_core(receiver_dir.path(), "Receiver", 46_122).await?;
+    pair(&sender, &receiver).await?;
+
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .map_err(|e| CoreError::Sync(e.to_string()))?;
+    let bound = listener
+        .local_addr()
+        .map_err(|e| CoreError::Sync(e.to_string()))?;
+    let shutdown = Arc::new(Notify::new());
+    let listener_core = receiver.clone();
+    let listener_shutdown = Arc::clone(&shutdown);
+    let handle = tokio::spawn(async move {
+        listener_core
+            .serve_inbound(listener, listener_shutdown)
+            .await
+    });
+
+    // Route by a NUMERIC IP:port string (as a user would type under "Connect by
+    // IP"), parsed to a SocketAddr -- no mDNS discovery involved.
+    let manual = format!("127.0.0.1:{}", bound.port());
+    let addr: std::net::SocketAddr = manual
+        .parse()
+        .map_err(|e| CoreError::Sync(format!("parse {manual}: {e}")))?;
+    let receiver_key = receiver.sync_public_key()?;
+    sender.add_sync_route(&receiver_key, addr).await?;
+
+    let persona = SyntheticPersona::new(
+        "dddddddd-dddd-4ddd-8ddd-dddddddddddd".to_string(),
+        "Manual IP".to_string(),
+        "AGE_35_44".to_string(),
+        "TEACHER".to_string(),
+        "CANADA".to_string(),
+        vec!["ACADEMIC".to_string(), "HISTORY".to_string()],
+        1_700_000_000_000,
+        1_800_000_000_000,
+    );
+    sender.save_persona(&persona).await?;
+    let pushed = sender.sync_persona_to_paired(&persona).await?;
+    assert_eq!(pushed, 1, "the paired peer should receive the push");
+
+    let mut applied = None;
+    for _ in 0..50 {
+        if let Ok(p) = receiver.get_persona(&persona.id).await {
+            applied = Some(p);
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    shutdown.notify_waiters();
+    let _ = handle.await;
+
+    let received = applied.ok_or_else(|| {
+        CoreError::Sync("a manual-IP push should have been received and persisted".to_string())
+    })?;
+    assert_eq!(received.id, persona.id);
+    assert_eq!(received.name, persona.name);
+    Ok(())
+}
