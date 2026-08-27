@@ -56,8 +56,8 @@
 //! Recognising those names takes two lists, because `if_addrs` reports a
 //! different KIND of string per platform: Unix gives the kernel device name
 //! (`docker0`, `wg0`), Windows gives the adapter's prose friendly name
-//! ("VirtualBox Host-Only Network"). See [`VIRTUAL_IFACE_PREFIXES`] and
-//! [`VIRTUAL_IFACE_FRAGMENTS`].
+//! ("VirtualBox Host-Only Network"). See the `VIRTUAL_IFACE_PREFIXES` and
+//! `VIRTUAL_IFACE_FRAGMENTS` tables in this module.
 
 use std::net::IpAddr;
 

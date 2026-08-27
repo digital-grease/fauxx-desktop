@@ -66,9 +66,8 @@
 //!
 //! rustls with the `ring` provider, verifying against the platform trust store
 //! (`rustls-platform-verifier`), so an enterprise or proxy root the user has
-//! actually installed is honoured. The provider is installed lazily by
-//! [`ensure_crypto_provider`] on the first check, so a user who never presses
-//! the button never initializes a TLS stack.
+//! actually installed is honoured. The provider is installed lazily on the first
+//! check, so a user who never presses the button never initializes a TLS stack.
 
 use std::time::Duration;
 

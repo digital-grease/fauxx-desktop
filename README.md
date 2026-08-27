@@ -2,14 +2,14 @@
 
 A privacy command center for the desktop: it generates realistic decoy web activity through synthetic personas to pollute the profiles that data brokers and ad-tech build about you. It is the cross-device companion to the [Fauxx Android app](https://github.com/digital-grease/fauxx), sharing the same persona model so a household can present one coherent, deliberately misleading picture across phone and desktop.
 
-It is decoy-only and local-first by design: it never touches your real accounts, never logs in anywhere, sends no telemetry, and keeps all state in an encrypted store on your own machine.
+It is decoy-only and local-first by design: it never touches your real accounts, never logs in anywhere, sends no telemetry, and keeps your personas, measurements, and secrets in an encrypted store on your own machine. Local debug logs and GUI preferences are written in the clear for your own troubleshooting; the logs are redacted when you export a bug report.
 
 > Status: early and under active development. Interfaces and on-disk formats can still change. See [Status](#status).
 
 ## What it does
 
 - **Synthetic personas.** Coherent, plausible decoy identities (demographics, interests) drawn from a real US Census ACS-PUMS distribution, mirroring the Android persona contract so the two stay in lockstep.
-- **Real-browser decoy.** Drives a dedicated, isolated Chromium profile over the DevTools Protocol so a persona's interests actually influence the Topics API and similar surfaces, on a throwaway profile that is verifiably separate from your real browser.
+- **Real-browser decoy.** Drives a dedicated, isolated Chromium profile over the DevTools Protocol, so decoy activity is real browsing rather than synthesized requests, on a throwaway profile that is verifiably separate from your real browser. Privacy Sandbox Topics read-back is supported behind an opt-in launch flag, and the WebExtension reports the Topics assigned in the browser it runs in.
 - **Cross-device coordination.** Pairs with the phone over the LAN (sealed crypto_box channel, QR pairing) so devices can run the same persona and rotate together, or deliberately fragment.
 - **Deterministic-channel defense.** Helpers for data-subject access requests, per-site masked aliases, and a read-only account inventory (no automation against real services).
 - **Measurement.** KL-divergence and per-category drift, a treated-versus-control A/B measure, and CSV/JSON/PDF efficacy snapshots, so you can see whether the noise is working.
@@ -31,7 +31,7 @@ The real work lives in a headless library so every surface shares one implementa
 These are enforced in code, not just intended:
 
 - **Decoy-only.** No real-account sign-in flows are ever driven. A hard blocklist of authentication endpoints is enforced fail-closed at browser launch and on every navigation.
-- **Local-first.** No analytics and no telemetry. The only thing that leaves the machine on its own is the decoy traffic itself. The single network request the app can make about *itself* is the update check, and it happens only when you press the button (see the FAQ).
+- **Local-first.** No analytics, no telemetry, and nothing about you is ever sent to us. The desktop does speak on your own LAN: with LAN sync on (the default in the GUI, switchable in Settings) it advertises this device over mDNS and listens for sealed frames from paired peers, and the optional Home Assistant bridge publishes status to a broker you configure. Both stay on your network. The only request that leaves your network about the app *itself* is the update check, and it happens only when you press the button (see the FAQ).
 - **Encrypted at rest.** State lives in a SQLCipher database whose key is held in the OS keystore, with an Argon2id passphrase-file fallback for headless hosts. Secrets are never written to the database or logs.
 - **Fail closed.** When a configured egress, keystore, or guardrail check cannot be satisfied, the affected action stops rather than degrading to a less-private path.
 
@@ -89,7 +89,7 @@ The CLI is the primary surface. A few examples:
 ```sh
 fauxx-cli status                 # show core/store status
 fauxx-cli persona list           # list synthetic personas
-fauxx-cli pair                   # pair with the phone (shows/scans a QR payload)
+fauxx-cli pair show              # show this device's pairing QR, fingerprint, addresses
 fauxx-cli run                    # run the agent in the foreground
 fauxx-cli serve --config c.json  # headless homelab mode (optionally with MQTT)
 fauxx-cli native-host            # the WebExtension bridge (launched by the browser)
@@ -117,7 +117,9 @@ This is early software. It builds, is covered by a large test suite, and has tag
 No. It is decoy-only, and a fail-closed blocklist refuses authenticated sign-in endpoints. It never imports cookies, tokens, or logins from your real browser profile.
 
 **Does it phone home?**
-No. There is no telemetry, and nothing is sent anywhere on a timer, at startup, or in the background. The only traffic it creates on its own is the decoy browsing itself.
+No. There is no telemetry, and nothing about you or this machine is sent to us, or to any remote service, on a timer, at startup, or in the background.
+
+One thing does happen automatically, but it stays on your local network: when LAN sync is on (the default in the GUI, off for `fauxx-cli serve` unless you enable it) the app announces itself over mDNS at startup so a paired phone can find it, and listens for sealed frames from peers you have paired. That announcement carries this device's name, its sync port, and its sync public key. It never leaves the local link, and the LAN sync switch in Settings turns it off.
 
 There is exactly one exception, and it only happens if you ask for it: pressing **Check for updates** in Settings (or running `fauxx-cli check-update`) makes a single request to the GitHub releases API. GitHub then sees your IP address and a User-Agent carrying the app name and version, and nothing else: no machine identifier, no OS string, no install id, and no persona data. If you never press it, nothing is ever contacted. The check also deliberately ignores any per-persona proxy, VPN, or Tor egress, **and any proxy set in your environment** (`ALL_PROXY`, `HTTP_PROXY`, `HTTPS_PROXY`), so a real request identifying this app never shares an exit with a persona's decoy traffic. Genuine network-layer routing you have configured yourself, such as a system VPN, still applies.
 
@@ -149,4 +151,4 @@ Issues use structured forms (bug, crash, feature) that auto-label on submit; ple
 
 ### Third-party components
 
-The desktop GUI embeds **Noto Sans Regular**, Copyright 2022 The Noto Project Authors (<https://github.com/notofonts/latin-greek-cyrillic>), licensed under the [SIL Open Font License 1.1](./apps/desktop/assets/fonts/LICENSE-NotoSans.txt). It ships renamed to the family `Fauxx UI` (name records only, no glyph changes) so a same-named font on your system cannot shadow the copy the app was tested with; `packaging/fonts/build-ui-font.py` performs that rename reproducibly. The font is compiled into the binary so the interface renders on hosts with no fonts configured (see the FAQ), and your own system fonts still cover any script it does not. Every distributed artifact carries the license text alongside the binary: the AppImage under `usr/share/doc/`, and the release archives at `apps/desktop/assets/fonts/LICENSE-NotoSans.txt`.
+The desktop GUI embeds **Noto Sans Regular**, Copyright 2022 The Noto Project Authors (<https://github.com/notofonts/latin-greek-cyrillic>), licensed under the [SIL Open Font License 1.1](./apps/desktop/assets/fonts/LICENSE-NotoSans.txt). It ships renamed to the family `Fauxx UI` (name records only, no glyph changes) so a same-named font on your system cannot shadow the copy the app was tested with; `packaging/fonts/build-ui-font.py` performs that rename reproducibly from a sha256-pinned copy of upstream Noto Sans Regular 2.015, so two runs produce byte-identical output and the derivation is auditable. The font is compiled into the binary so the interface renders on hosts with no fonts configured (see the FAQ), and your own system fonts still cover any script it does not. Every distributed artifact carries the license text alongside the binary: the AppImage under `usr/share/doc/`, and the release archives as `LICENSE-NotoSans.txt` beside the binary at the archive root.

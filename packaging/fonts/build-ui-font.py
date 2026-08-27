@@ -84,7 +84,12 @@ def main() -> int:
         )
         return 1
 
-    font = TTFont(source)
+    # recalcTimestamp=False is what makes this reproducible. fontTools defaults it
+    # to True, which rewrites head.modified to the builder's wall clock, so two
+    # runs from the identical pinned input produce different bytes and an auditor
+    # cannot confirm the shipped blob is nothing but a renamed upstream face.
+    # Preserving the upstream timestamp keeps the output byte-stable forever.
+    font = TTFont(source, recalcTimestamp=False)
     name = font["name"]
     version = name.getDebugName(5) or ""
 
