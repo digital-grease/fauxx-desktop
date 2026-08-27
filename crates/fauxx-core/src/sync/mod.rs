@@ -49,6 +49,7 @@
 
 pub mod crypto;
 pub mod discovery;
+pub mod endpoints;
 pub mod peer;
 pub mod qr;
 pub mod tcp;
@@ -61,6 +62,10 @@ use tokio::sync::Mutex;
 
 pub use crypto::{DeviceIdentity, SealedEnvelope, MAC_LEN, NONCE_LEN, PUBLIC_KEY_LEN};
 pub use discovery::{AdvertisedDevice, MdnsDiscovery};
+pub use endpoints::{
+    local_endpoints, local_socket_strings, pairing_socket_strings, LocalEndpoint,
+    PAIRING_ADDR_LIMIT,
+};
 pub use peer::{DiscoveredPeer, PairedPeer};
 pub use qr::PairingQr;
 pub use tcp::{routing_table, RoutingTable, TcpTransport};
@@ -290,6 +295,12 @@ impl LanSync {
     }
 
     /// Build the pairing payload this device shows to a peer.
+    ///
+    /// Carries both hints: the mDNS host name, and the literal `IP:port`
+    /// endpoints from [`endpoints::local_socket_strings`]. The addresses are
+    /// what make pairing work when the scanning device cannot resolve a bare
+    /// `.local.` name, which is the #38 failure; the host name stays for peers
+    /// that can resolve it and for stability across a DHCP lease change.
     pub fn pairing_payload(&self) -> PairingPayload {
         PairingPayload::new(
             self.inner.device_name.clone(),
@@ -297,6 +308,16 @@ impl LanSync {
             Some(format!("{}.local.", sanitize_host(&self.inner.device_name))),
             self.inner.port,
         )
+        .with_addrs(endpoints::pairing_socket_strings(self.inner.port))
+    }
+
+    /// The `IP:port` endpoints another device on this LAN can dial to reach
+    /// this one, best candidate first.
+    ///
+    /// Surfaced so the GUI and CLI can show a user exactly what to type into a
+    /// phone's connect-by-address field when discovery does not find us (#38).
+    pub fn local_endpoints(&self) -> Vec<String> {
+        endpoints::local_socket_strings(self.inner.port, usize::MAX)
     }
 
     /// Render the pairing QR (unicode + SVG) for this device.
@@ -332,11 +353,16 @@ impl LanSync {
 
     /// Complete pairing with a peer described by a scanned pairing payload.
     ///
-    /// The handshake is two-sided: this records the *peer's* public key (so we
-    /// can seal to and authenticate from it), and the peer, having scanned (or
-    /// been told) *our* payload, records ours. Both ends thus hold each other's
-    /// public key, which is what unlocks the sealed channel between them. The
-    /// record is persisted in the encrypted store.
+    /// Pairing is *per-device and directional*: this records the *peer's* public
+    /// key (so we can seal to and authenticate from it) into THIS device's paired
+    /// set only. It does not, and cannot, make the peer adopt us in return (the
+    /// QR is shown out of band and the sealed frame carries no cleartext sender).
+    /// The channel only unlocks once BOTH ends hold each other's key, so the
+    /// peer must independently complete pairing against *our* payload too (it
+    /// scans our QR, or pastes our code). Until then a push from this peer is
+    /// rejected on receive with the "pair the other device back" guidance from
+    /// [`Core::ingest_inbound_frame`](crate::Core::ingest_inbound_frame) (issue
+    /// #42). The record is persisted in the encrypted store.
     pub async fn complete_pairing(&self, scanned: &PairingPayload) -> Result<PairedPeer> {
         let pk = scanned.public_key_bytes()?;
         // Refuse to "pair with self": that would let our own broadcast loop back.

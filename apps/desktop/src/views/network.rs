@@ -30,7 +30,7 @@
 //! It issues no core calls: every control emits a [`Message`] the update fn
 //! turns into a `core.set/get_persona_egress` / `set/get_persona_dns` task.
 
-use fauxx_core::{DnsStrategy, Egress, EgressExit};
+use fauxx_core::{DnsStrategy, Egress, EgressExit, EgressPorts};
 use iced::widget::{button, column, container, pick_list, row, scrollable, text, Space};
 use iced::{Color, Element, Length};
 
@@ -83,6 +83,7 @@ fn loaded<'a>(snapshot: &'a NetworkSnapshot, busy: bool) -> Element<'a, Message>
         exit_panel(snapshot.exit.as_ref()),
         egress_panel(&snapshot.egress, busy),
         dns_panel(&snapshot.dns, &snapshot.dns_note, busy),
+        ports_panel(snapshot.ports, busy),
     ]
     .spacing(12);
 
@@ -256,6 +257,63 @@ fn dns_button(
 ) -> Element<'static, Message> {
     let is_active = &option == current;
     let press = (!is_active && !busy).then_some(Message::NetworkSetDns(option));
+    button(text(label).size(12))
+        .on_press_maybe(press)
+        .padding(8)
+        .style(if is_active {
+            button::primary
+        } else {
+            button::secondary
+        })
+        .into()
+}
+
+/// The outbound port policy (#40), for users behind a strict egress firewall.
+fn ports_panel(current: EgressPorts, busy: bool) -> Element<'static, Message> {
+    let mut col = column![text("Outbound ports").size(16)].spacing(8);
+
+    let buttons = row![
+        ports_button("Unrestricted", EgressPorts::Unrestricted, current, busy),
+        ports_button("TCP/443 only", EgressPorts::Https443Only, current, busy),
+    ]
+    .spacing(8);
+    col = col.push(buttons);
+
+    // Say plainly what the restriction does and, just as importantly, what it
+    // does NOT do: a user who reads "443 only" and expects it to cover device
+    // pairing would be surprised when sync keeps working.
+    let note = if current.is_restricted() {
+        "Decoy traffic is restricted to TCP port 443, and QUIC (UDP/443) is disabled. \
+         This requires DNS-over-HTTPS, since the system resolver (port 53) and DoT \
+         (port 853) would be blocked. It applies to the decoy browser only: LAN sync \
+         and mDNS device pairing are unaffected."
+    } else {
+        "Decoy traffic may use any port. Choose TCP/443 only if your firewall allows \
+         outbound 443 and nothing else; it requires DNS-over-HTTPS and does not apply \
+         to LAN sync or device pairing."
+    };
+    col = col.push(
+        container(text(note).size(11))
+            .padding(8)
+            .width(Length::Fill)
+            .style(crate::style::warning_pill),
+    );
+
+    container(col)
+        .padding(12)
+        .width(Length::Fill)
+        .style(crate::style::panel)
+        .into()
+}
+
+fn ports_button(
+    label: &'static str,
+    option: EgressPorts,
+    current: EgressPorts,
+    busy: bool,
+) -> Element<'static, Message> {
+    let is_active = option == current;
+    let press = (!is_active && !busy).then_some(Message::NetworkSetPorts(option));
     button(text(label).size(12))
         .on_press_maybe(press)
         .padding(8)

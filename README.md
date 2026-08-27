@@ -31,7 +31,7 @@ The real work lives in a headless library so every surface shares one implementa
 These are enforced in code, not just intended:
 
 - **Decoy-only.** No real-account sign-in flows are ever driven. A hard blocklist of authentication endpoints is enforced fail-closed at browser launch and on every navigation.
-- **Local-first.** No analytics, no telemetry, no remote endpoint. The only thing that leaves the machine is the decoy traffic itself.
+- **Local-first.** No analytics and no telemetry. The only thing that leaves the machine on its own is the decoy traffic itself. The single network request the app can make about *itself* is the update check, and it happens only when you press the button (see the FAQ).
 - **Encrypted at rest.** State lives in a SQLCipher database whose key is held in the OS keystore, with an Argon2id passphrase-file fallback for headless hosts. Secrets are never written to the database or logs.
 - **Fail closed.** When a configured egress, keystore, or guardrail check cannot be satisfied, the affected action stops rather than degrading to a less-private path.
 
@@ -103,9 +103,13 @@ To run the GUI, build with the `gui` feature and run `fauxx-desktop` (a graphica
 
 Pair the desktop with the phone over the local network: one device shows a QR payload carrying its public key and a connection hint, the other scans (or pastes) it. After pairing, personas and signed artifacts move over a sealed channel that unpaired devices cannot read or write. The wire contract and security model live in the `crate::sync::wire` and `crate::sync` modules.
 
+Pairing is **per-device and must be done both ways**. Scanning the desktop's code pairs the desktop *on the phone*; for the desktop to accept the phone's pushes, pair the phone back from the Devices screen (or `fauxx-cli pair add <phone-code>`). Until both directions are done, an inbound push is refused because neither side can authenticate a peer it has not paired.
+
+The pairing code also carries the desktop's dialable `IP:port` addresses, and the Devices screen lists them with a copy button, so pairing still works when the phone cannot resolve the desktop's `.local.` name over mDNS.
+
 ## Status
 
-This is early software. It builds and is covered by a large test suite, but it has not had a tagged release yet, and some paths still need hardware to exercise end to end (a graphical session for the GUI, a real authenticated proxy for that egress mode). Expect rough edges and changing formats. Bug reports and feature requests are welcome through the [issue forms](https://github.com/digital-grease/fauxx-desktop/issues/new/choose).
+This is early software. It builds, is covered by a large test suite, and has tagged releases, but some paths still need hardware to exercise end to end (a graphical session for the GUI, a real authenticated proxy for that egress mode). Expect rough edges and changing formats. Bug reports and feature requests are welcome through the [issue forms](https://github.com/digital-grease/fauxx-desktop/issues/new/choose).
 
 ## FAQ
 
@@ -113,7 +117,18 @@ This is early software. It builds and is covered by a large test suite, but it h
 No. It is decoy-only, and a fail-closed blocklist refuses authenticated sign-in endpoints. It never imports cookies, tokens, or logins from your real browser profile.
 
 **Does it phone home?**
-No. There is no telemetry and no remote endpoint. The only network traffic it creates is the decoy browsing itself.
+No. There is no telemetry, and nothing is sent anywhere on a timer, at startup, or in the background. The only traffic it creates on its own is the decoy browsing itself.
+
+There is exactly one exception, and it only happens if you ask for it: pressing **Check for updates** in Settings (or running `fauxx-cli check-update`) makes a single request to the GitHub releases API. GitHub then sees your IP address and a User-Agent carrying the app name and version, and nothing else: no machine identifier, no OS string, no install id, and no persona data. If you never press it, nothing is ever contacted. The check also deliberately ignores any per-persona proxy, VPN, or Tor egress, **and any proxy set in your environment** (`ALL_PROXY`, `HTTP_PROXY`, `HTTPS_PROXY`), so a real request identifying this app never shares an exit with a persona's decoy traffic. Genuine network-layer routing you have configured yourself, such as a system VPN, still applies.
+
+**The phone will not pair, or says it has no route to the desktop.**
+Two things to check, in order. First, pairing is two-way: after the phone scans the desktop's code, pair the phone back on the desktop's Devices screen, or the desktop will refuse the phone's pushes. Second, if the phone reports no route, it cannot resolve the desktop's `.local.` name; open **Devices** on the desktop, copy one of the addresses under "Reach this device", and enter it on the phone as a manual address. Try the first address listed first.
+
+**How do I know when there is a new version?**
+Open **Settings** and press **Check for updates**, or run `fauxx-cli check-update`. Nothing checks automatically, so this is the only way the app will tell you. It reports what the latest release is and gives you the link; it does not download or install anything. On Linux the AppImage carries update information, so AppImageUpdate or AppImageLauncher can update it in place.
+
+**The window opens but shows no text.**
+Fixed in 0.3.0, which bundles its own UI font. Earlier versions asked the host for a font family they assumed every system had, and drew nothing on a host without it. The bundled font removes that assumption; text in scripts it does not cover still uses your system fonts.
 
 **The GUI does not start.**
 The GUI is behind the `gui` feature and needs a graphical session. Build with `cargo build -p fauxx-desktop --features gui`, and run it from a desktop session. The default build is intentionally headless.
@@ -131,3 +146,7 @@ Issues use structured forms (bug, crash, feature) that auto-label on submit; ple
 ## License
 
 [GNU Affero General Public License v3.0 or later](./LICENSE) (AGPL-3.0-or-later), the same license as the rest of the Fauxx project.
+
+### Third-party components
+
+The desktop GUI embeds **Noto Sans Regular**, Copyright 2022 The Noto Project Authors (<https://github.com/notofonts/latin-greek-cyrillic>), licensed under the [SIL Open Font License 1.1](./apps/desktop/assets/fonts/LICENSE-NotoSans.txt). It ships renamed to the family `Fauxx UI` (name records only, no glyph changes) so a same-named font on your system cannot shadow the copy the app was tested with; `packaging/fonts/build-ui-font.py` performs that rename reproducibly. The font is compiled into the binary so the interface renders on hosts with no fonts configured (see the FAQ), and your own system fonts still cover any script it does not. Every distributed artifact carries the license text alongside the binary: the AppImage under `usr/share/doc/`, and the release archives at `apps/desktop/assets/fonts/LICENSE-NotoSans.txt`.

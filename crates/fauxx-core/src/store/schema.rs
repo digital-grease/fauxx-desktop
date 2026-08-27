@@ -28,7 +28,7 @@ use rusqlite::Connection;
 use crate::error::Result;
 
 /// The schema version this build expects. Equals the number of migrations.
-pub const SCHEMA_VERSION: i64 = 15;
+pub const SCHEMA_VERSION: i64 = 16;
 
 /// Ordered, forward-only migrations. Migration `i` upgrades the database from
 /// version `i` to version `i + 1`. Never edit a shipped migration; append a new
@@ -444,6 +444,29 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX idx_campaigns_persona ON campaigns (persona_id);
     CREATE INDEX idx_campaigns_status ON campaigns (status, updated_at);
+    ",
+    // v15 -> v16: per-persona outbound port policy (#40).
+    //
+    // `persona_egress_ports` binds, per persona, which outbound ports that
+    // persona's decoy traffic may use: unrestricted (the default, and what
+    // every existing persona keeps) or confined to TCP/443. Requested by users
+    // running behind a strict egress firewall that allows 443 and nothing else.
+    //
+    // A third small table rather than a column on `persona_egress`, for the same
+    // reason `persona_dns` is separate: each is an independent axis of the same
+    // decoy profile, set and cleared on its own, and `PersonaNetwork` composes
+    // them at read time. Absent row = unrestricted, so no backfill is needed and
+    // a persona created before this migration behaves exactly as it did.
+    //
+    // No foreign key to `personas`, for the same rotation-survival reason as
+    // `persona_egress` and `persona_dns`.
+    "
+    CREATE TABLE persona_egress_ports (
+        persona_id   TEXT PRIMARY KEY NOT NULL,
+        -- The exact EgressPorts JSON (\"unrestricted\" | \"https443-only\").
+        json         TEXT NOT NULL,
+        updated_at   INTEGER NOT NULL
+    );
     ",
 ];
 

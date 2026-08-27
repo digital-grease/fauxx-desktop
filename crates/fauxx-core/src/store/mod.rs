@@ -53,7 +53,7 @@ use crate::campaigns::Campaign;
 use crate::dsar::DsarRequest;
 use crate::error::{CoreError, Result};
 use crate::measurement::ShadowProfile;
-use crate::network::{DnsStrategy, Egress};
+use crate::network::{DnsStrategy, Egress, EgressPorts};
 use crate::persona::SyntheticPersona;
 use crate::personapack::PackRecord;
 use crate::studio::PersonaSettings;
@@ -1431,6 +1431,50 @@ impl EncryptedStore {
     pub fn delete_persona_dns(&self, persona_id: &str) -> Result<bool> {
         let affected = self.conn.execute(
             "DELETE FROM persona_dns WHERE persona_id = ?1",
+            [persona_id],
+        )?;
+        Ok(affected > 0)
+    }
+
+    // --- per-persona outbound port policy (#40) -----------------------------
+
+    /// Insert or replace the [`EgressPorts`] policy for a persona, keyed on its
+    /// persona id.
+    pub fn put_persona_egress_ports(&self, persona_id: &str, ports: &EgressPorts) -> Result<()> {
+        let json = serde_json::to_string(ports)?;
+        self.conn.execute(
+            "INSERT INTO persona_egress_ports (persona_id, json, updated_at) VALUES (?1, ?2, ?3)
+             ON CONFLICT(persona_id) DO UPDATE SET
+                 json = excluded.json,
+                 updated_at = excluded.updated_at",
+            rusqlite::params![persona_id, json, now_millis()],
+        )?;
+        Ok(())
+    }
+
+    /// Read the [`EgressPorts`] policy for a persona, or `None` if none is set
+    /// (the caller treats that as [`EgressPorts::Unrestricted`], which is what
+    /// every persona created before this table existed gets).
+    pub fn get_persona_egress_ports(&self, persona_id: &str) -> Result<Option<EgressPorts>> {
+        let json: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT json FROM persona_egress_ports WHERE persona_id = ?1",
+                [persona_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        match json {
+            Some(j) => Ok(Some(serde_json::from_str(&j)?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Delete a persona's port-policy binding, returning it to unrestricted.
+    /// Returns `true` if a row was removed.
+    pub fn delete_persona_egress_ports(&self, persona_id: &str) -> Result<bool> {
+        let affected = self.conn.execute(
+            "DELETE FROM persona_egress_ports WHERE persona_id = ?1",
             [persona_id],
         )?;
         Ok(affected > 0)

@@ -1,7 +1,7 @@
 [package]
 name = "fauxx-desktop"
 description = "Fauxx desktop companion GUI: an Iced MVU shell and system-tray agent, a thin client over fauxx-core."
-version = "0.2.1"
+version = "0.3.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -86,3 +86,11 @@ tray-icon = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 ksni = { workspace = true, optional = true }
+
+# Test-only. The bundled UI font is selected by FAMILY NAME through
+# fontdb/ttf-parser at runtime, and iced reports a font-registration failure to
+# nobody (it discards the load result), so asserting through these crates is the
+# only automated defence against shipping an asset the app cannot resolve.
+[dev-dependencies]
+fontdb = { workspace = true }
+ttf-parser = { workspace = true }

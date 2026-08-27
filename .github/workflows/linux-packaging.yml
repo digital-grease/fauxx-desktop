@@ -110,6 +110,13 @@ jobs:
             install -Dm644 "packaging/linux/icons/hicolor/${size}x${size}/apps/${APP_ID}.png" \
               "$APPDIR/usr/share/icons/hicolor/${size}x${size}/apps/${APP_ID}.png"
           done
+          # The binary embeds Noto Sans (apps/desktop/src/font.rs, include_bytes!),
+          # so the OFL 1.1 text and its copyright notice have to travel WITH it:
+          # OFL clause 2 requires the licence to accompany every copy of the font
+          # software, and the licence terminates if it does not. The AGPL text for
+          # the app itself rides in the source tarball and the repo LICENSE.
+          install -Dm644 apps/desktop/assets/fonts/LICENSE-NotoSans.txt \
+            "$APPDIR/usr/share/doc/${APP_ID}/LICENSE-NotoSans.txt"
 
       - name: Fetch linuxdeploy
         run: |
