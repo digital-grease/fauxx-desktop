@@ -33,9 +33,19 @@ pub fn view(app: &App) -> Element<'_, Message> {
             personas,
             refreshing,
         } => crate::views::running::view(status, personas, *refreshing),
-        AppState::Devices { snapshot, busy } => {
-            crate::views::devices::view(snapshot.as_ref(), *busy)
-        }
+        AppState::Devices {
+            snapshot,
+            busy,
+            pair_back_input,
+            pair_back_note,
+            copy_note,
+        } => crate::views::devices::view(
+            snapshot.as_ref(),
+            *busy,
+            pair_back_input,
+            pair_back_note.as_deref(),
+            copy_note.as_deref(),
+        ),
         AppState::Dashboard {
             snapshot,
             selected_platform,
@@ -65,7 +75,8 @@ pub fn view(app: &App) -> Element<'_, Message> {
             draft,
             port_text,
             busy,
-        } => crate::views::settings::view(draft, port_text, *busy),
+            update,
+        } => crate::views::settings::view(draft, port_text, *busy, update),
         AppState::Faq => crate::views::faq::view(),
         AppState::Wizard {
             step,
@@ -136,6 +147,9 @@ mod tests {
                 AppState::Devices {
                     snapshot: None,
                     busy: true,
+                    pair_back_input: String::new(),
+                    pair_back_note: None,
+                    copy_note: None,
                 },
                 AppState::Dashboard {
                     snapshot: None,
@@ -164,6 +178,7 @@ mod tests {
                     draft: crate::prefs::DesktopSettings::default(),
                     port_text: String::new(),
                     busy: false,
+                    update: crate::state::UpdateProbe::Idle,
                 },
                 AppState::Faq,
             ]

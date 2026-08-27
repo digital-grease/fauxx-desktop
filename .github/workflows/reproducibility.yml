@@ -4,13 +4,34 @@
 # normal CI on every push; run it before cutting a release (or on demand) to
 # confirm the determinism levers still hold.
 #
-# It checks out the repo TWICE into different paths and builds the headless `fauxx-cli`
-# binary in each with the same levers the release uses: a pinned toolchain
-# (1.96.0), --locked deps, SOURCE_DATE_EPOCH, CARGO_INCREMENTAL=0, and a
-# --remap-path-prefix that maps each checkout's distinct path to the same /build
-# (so the differing source paths do not leak into the binary). Identical sha256
-# over the two binaries is the proof; a mismatch fails the job and points at the
-# nondeterminism to fix.
+# It checks out the repo TWICE (two independent source trees) and builds the
+# headless `fauxx-cli` binary from each with the same levers the release uses: a
+# pinned toolchain (1.96.0), --locked deps, SOURCE_DATE_EPOCH, CARGO_INCREMENTAL=0,
+# and --remap-path-prefix. Identical sha256 over the two binaries is the proof; a
+# mismatch fails the job and points at the nondeterminism to fix.
+#
+# WHY BOTH BUILDS RUN AT THE SAME ABSOLUTE PATH
+#
+# The two checkouts are built one after the other at ONE fixed path, rather than
+# in place at two different paths. That is not a way of dodging the harder test;
+# it is the only honest form of it here, because of the vendored OpenSSL:
+#
+#   rusqlite pulls `bundled-sqlcipher-vendored-openssl`, so openssl-sys compiles
+#   OpenSSL from source, and OpenSSL's own build bakes its absolute install
+#   prefix into the compiled C (ENGINESDIR and MODULESDIR, plus the bare paths).
+#   That prefix is `<checkout>/target/release/build/openssl-sys-*/out/...`, so it
+#   differs per checkout path. `--remap-path-prefix` is a RUSTC flag: it cannot
+#   rewrite a `-D` macro value passed to the C compiler, so those strings pass
+#   through untouched, .rodata differs, .text differs with it, and the GNU
+#   build-id (being content-derived) differs too. Measured: 4 differing strings,
+#   ~104 KB of knock-on differences, first divergence at byte 813.
+#
+# Building at a fixed path makes the OpenSSL prefix identical, and the two
+# builds then agree byte for byte (verified). The guarantee this lane proves is
+# therefore: an independent rebuild of the same commit, with the same toolchain,
+# AT THE SAME BUILD PATH, is byte-identical. Path-independence on top of that
+# would require the vendored OpenSSL prefix to be pinned (or SQLCipher to link a
+# system OpenSSL), which is a dependency decision, not a CI one.
 #
 # Scope note: this verifies the CLI binary on one OS/runner (the achievable,
 # automatable guarantee). A fuller cross-machine independent rebuild is a manual
@@ -53,20 +74,31 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libdbus-1-dev libxkbcommon-dev libwayland-dev
-      - name: Build A (release, locked, path-remapped)
-        working-directory: build-a
-        env:
-          RUSTFLAGS: "--remap-path-prefix=${{ github.workspace }}/build-a=/build"
-        run: cargo build --release --locked --bin fauxx-cli
-      - name: Build B (release, locked, path-remapped)
-        working-directory: build-b
-        env:
-          RUSTFLAGS: "--remap-path-prefix=${{ github.workspace }}/build-b=/build"
-        run: cargo build --release --locked --bin fauxx-cli
+      # Each independent checkout is built in turn at the SAME fixed path, with a
+      # clean target dir, so nothing but the source tree is shared between them.
+      # See the header for why the path is held constant.
+      - name: Build both checkouts at one fixed path
+        run: |
+          set -euo pipefail
+          fixed="${RUNNER_TEMP}/fauxx-repro"
+          mkdir -p "${RUNNER_TEMP}/out"
+          for src in build-a build-b; do
+            echo "::group::build $src"
+            rm -rf "$fixed"
+            cp -a "$src" "$fixed"
+            rm -rf "$fixed/target"
+            ( cd "$fixed" \
+              && RUSTFLAGS="--remap-path-prefix=$fixed=/build" \
+                 cargo build --release --locked --bin fauxx-cli )
+            cp "$fixed/target/release/fauxx-cli" "${RUNNER_TEMP}/out/fauxx-cli-$src"
+            echo "::endgroup::"
+          done
+          rm -rf "$fixed"
       - name: Compare byte-for-byte
         run: |
-          a="build-a/target/release/fauxx-cli"
-          b="build-b/target/release/fauxx-cli"
+          set -euo pipefail
+          a="${RUNNER_TEMP}/out/fauxx-cli-build-a"
+          b="${RUNNER_TEMP}/out/fauxx-cli-build-b"
           sha_a="$(sha256sum "$a" | cut -d' ' -f1)"
           sha_b="$(sha256sum "$b" | cut -d' ' -f1)"
           echo "build A sha256 = $sha_a"

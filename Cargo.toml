@@ -137,6 +137,46 @@ dryoc = "=0.8.0"
 # Pure-Rust mDNS service registration + browsing for phone <-> desktop LAN
 # discovery (no Avahi/Bonjour system daemon).
 mdns-sd = "=0.20.0"
+# Local interface enumeration, so the desktop can tell the user (and put in the
+# pairing payload) the addresses a phone can actually dial. mDNS advertises a
+# `.local.` hostname, which Android cannot reliably resolve on its own, so a
+# literal address is the difference between pairing working and "no route"
+# (#38). Already in the graph as a transitive dependency of mdns-sd at this
+# exact version, so this direct edge adds no new crate.
+if-addrs = "=0.15.0"
+# HTTP client for the USER-INITIATED update check (`crate::update`). reqwest is
+# already in the graph (chromiumoxide drives the local CDP port with it) but
+# carries NO TLS backend, so HTTPS costs extra crates either way.
+#
+# `rustls-no-provider` rather than `rustls`: the repo policy prefers rustls over
+# openssl/native-tls (see the `deny` list in deny.toml), and the plain `rustls`
+# feature would drag in aws-lc-rs + cmake (a SECOND C build, on top of the
+# OpenSSL already vendored for SQLCipher) plus a QUIC/UDP stack this never uses.
+# `-no-provider` skips the bundled provider so we install `ring` ourselves,
+# which drops aws-lc-sys, cmake, and quinn: 13 crates instead of 22, and no new
+# C build system on any target.
+reqwest = { version = "=0.13.4", default-features = false, features = ["rustls-no-provider"] }
+# The rustls crypto provider for the update check. Installed lazily, on the
+# first check, so a user who never presses the button never initializes TLS.
+rustls = { version = "=0.23.43", default-features = false, features = ["ring", "std", "tls12"] }
+# Correct version comparison for the update check, including PRE-RELEASE
+# ordering: this project ships `v0.1.0-rc.N` tags, and hand-rolled compares get
+# exactly that case wrong. Already in the tree as a build-dependency of
+# rustc_version; this promotes it to one runtime crate.
+semver = "=1.0.28"
+# WHATWG URL parser, used to decide whether a decoy navigation target is on port
+# 443 (#40). This is the SAME specification Chromium implements, which is the
+# whole point: a hand-rolled authority parser is inevitably stricter than the
+# browser's, and every input the browser accepts but our parser rejects becomes
+# a FAIL-OPEN in a security control. Already in the graph via reqwest and
+# chromiumoxide at this version, so the direct edge adds no new crate.
+url = "=2.5.8"
+# DEV-ONLY (apps/desktop tests): the exact font-resolution stack the GUI runs on
+# at startup, so the bundled-font tests exercise the real path rather than a
+# hand-rolled parser. iced 0.14 -> cosmic-text 0.15 -> fontdb 0.23 -> ttf-parser
+# 0.25; both are already in the graph transitively, so these add no new crate.
+fontdb = "=0.23.0"
+ttf-parser = "=0.25.1"
 # QR generation for out-of-band pairing (desktop shows a QR carrying its public
 # key + connection hint; the phone scans it).
 qrcode = "=0.14.1"

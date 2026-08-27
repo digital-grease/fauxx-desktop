@@ -30,6 +30,8 @@ mod bg;
 #[cfg(feature = "gui")]
 mod firstrun;
 #[cfg(feature = "gui")]
+mod font;
+#[cfg(feature = "gui")]
 mod message;
 #[cfg(feature = "gui")]
 mod prefs;
@@ -109,6 +111,14 @@ fn gui_main() -> iced::Result {
     .title(App::title)
     .theme(App::theme)
     .subscription(subscription)
+    // Register and select the bundled typeface (#52). iced's default
+    // `Font::SansSerif` is a generic family resolved through the host's font
+    // database; on a host with no sans-serif alias that resolves to nothing and
+    // every glyph renders blank while the layout still draws. Shipping our own
+    // face makes the UI legible with no host fonts installed at all. See the
+    // `font` module for the full rationale.
+    .font(font::UI_FONT_BYTES)
+    .default_font(font::ui())
     // Close-to-tray: the window-manager close button hides the window instead
     // of exiting. The agent and tray stay resident; the tray's "Quit" item is
     // the real exit path.

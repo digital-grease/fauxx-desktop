@@ -25,9 +25,9 @@
 //! into the owned, `Clone` view payloads the UI consumes.
 
 use fauxx_core::{
-    Baseline, Campaign, Comparator, Config, CoordinationMode, Core, DnsStrategy, Egress, Goal,
-    IntensityLevel, PackProvenance, PersonaField, PersonaSettings, Platform, PlatformDrift,
-    RotationSchedule, StaticReachability, SyntheticPersona, TargetMetric,
+    Baseline, Campaign, Comparator, Config, CoordinationMode, Core, DnsStrategy, Egress,
+    EgressPorts, Goal, IntensityLevel, PackProvenance, PersonaField, PersonaSettings, Platform,
+    PlatformDrift, RotationSchedule, StaticReachability, SyntheticPersona, TargetMetric,
 };
 
 use crate::firstrun;
@@ -116,12 +116,17 @@ pub async fn load_devices(core: Core) -> Result<DevicesSnapshot, String> {
     let paired = core.paired_peers().await.map_err(|e| e.to_string())?;
     let discovered = core.discovered_peers().await.map_err(|e| e.to_string())?;
     let mode = core.coordination_mode().await.map_err(|e| e.to_string())?;
+    // Best-effort like the QR: a store-less core has no sync engine, and a host
+    // with no network has no addresses. Either way an empty list just means the
+    // view shows no address hint.
+    let local_endpoints = core.local_endpoints().await.unwrap_or_default();
     Ok(DevicesSnapshot {
         pairing_qr,
         fingerprint,
         paired,
         discovered,
         mode,
+        local_endpoints,
     })
 }
 
@@ -562,6 +567,7 @@ pub async fn load_network(
             dns: DnsStrategy::SystemDefault,
             exit: None,
             dns_note: DnsStrategy::SystemDefault.observer_note(),
+            ports: EgressPorts::default(),
         });
     };
 
@@ -580,6 +586,10 @@ pub async fn load_network(
         .await
         .map_err(|e| e.to_string())?;
     let dns_note = dns.observer_note();
+    let ports = core
+        .get_persona_egress_ports(&pid)
+        .await
+        .map_err(|e| e.to_string())?;
 
     Ok(NetworkSnapshot {
         personas: persona_choices,
@@ -588,6 +598,7 @@ pub async fn load_network(
         dns,
         exit: Some(exit),
         dns_note,
+        ports,
     })
 }
 
@@ -601,6 +612,32 @@ pub async fn set_egress(core: Core, persona_id: String, egress: Egress) -> Resul
 /// Bind a persona's DNS strategy (N2), reporting success/failure for the banner.
 pub async fn set_dns(core: Core, persona_id: String, dns: DnsStrategy) -> Result<(), String> {
     core.set_persona_dns(&persona_id, dns)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Bind a persona's outbound port policy (#40), reporting success/failure for
+/// the banner.
+///
+/// The core validates the whole resulting network config, so an incoherent
+/// combination (443-only with system DNS, DoT, or a proxy on another port)
+/// comes back as an `Err` the banner shows verbatim, naming the fix.
+pub async fn set_egress_ports(
+    core: Core,
+    persona_id: String,
+    ports: EgressPorts,
+) -> Result<(), String> {
+    core.set_persona_egress_ports(&persona_id, ports)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Run the user-initiated update check.
+///
+/// Takes no `Core`: the check reads nothing local and touches no store. It is
+/// reached only from `Message::CheckForUpdate`, which only a button press emits.
+pub async fn check_for_update() -> Result<fauxx_core::UpdateCheck, String> {
+    fauxx_core::check_for_update()
         .await
         .map_err(|e| e.to_string())
 }
@@ -630,6 +667,27 @@ pub async fn import_phone_persona(core: Core, payload: String) -> Result<String,
     Ok(format!(
         "Paired with {}. Personas will sync from the phone.",
         peer.name
+    ))
+}
+
+/// Pair a device back from the Devices view by its pasted pairing-payload
+/// string (issue #42 symmetric pairing). LAN-sync pairing is per-device: after
+/// the phone scans this device's QR, the user pastes the phone's pairing code
+/// here so this device pairs it back. Only then can this device authenticate
+/// (and accept) inbound pushes from that peer. Returns a short human summary, or
+/// `Err` on a malformed or failed payload.
+pub async fn pair_back(core: Core, payload: String) -> Result<String, String> {
+    let trimmed = payload.trim();
+    if trimmed.is_empty() {
+        return Err("paste the pairing code from the other device first".to_string());
+    }
+    let peer = core
+        .complete_pairing(trimmed)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(format!(
+        "Paired {} ({}). This device can now sync with it.",
+        peer.name, peer.fingerprint
     ))
 }
 

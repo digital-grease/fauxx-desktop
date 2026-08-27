@@ -430,6 +430,37 @@ mod tests {
             canonical, FROZEN_QR,
             "QR pairing encoder drifted from the frozen vector"
         );
+        // The `addrs` address hint (#38) is ADDITIVE: it does not bump `v`, so
+        // these two directions are the whole compatibility contract with the
+        // phone, and both are pinned here.
+        //
+        // (1) A payload minted before `addrs` existed still decodes, with no
+        //     addresses, and the receiver falls back to `host` as it always did.
+        assert!(
+            payload.addrs.is_empty(),
+            "the frozen (pre-addrs) vector must decode with no addresses"
+        );
+        // (2) Adding addresses changes the encoding ONLY by appending the field,
+        //     and round-trips losslessly. A decoder that ignores `addrs` sees the
+        //     same v/name/pk/host/port it always did.
+        let with_addrs = crate::sync::PairingPayload::new(
+            "Desktop-Study".to_string(),
+            &[7u8; 32],
+            Some("desktop.local.".to_string()),
+            45_999,
+        )
+        .with_addrs(vec!["192.168.1.50:45999".to_string()]);
+        let encoded_with_addrs = with_addrs.encode()?;
+        assert_ne!(
+            encoded_with_addrs, FROZEN_QR,
+            "a payload carrying addresses must encode differently"
+        );
+        let round_tripped = crate::sync::PairingPayload::decode(&encoded_with_addrs)?;
+        assert_eq!(round_tripped, with_addrs);
+        assert_eq!(round_tripped.name, "Desktop-Study");
+        assert_eq!(round_tripped.host.as_deref(), Some("desktop.local."));
+        assert_eq!(round_tripped.port, 45_999);
+        assert_eq!(round_tripped.addrs, vec!["192.168.1.50:45999".to_string()]);
 
         // --- self-consistency of the emitted vector (the Android side pins it) ---
         let nonce_hex = hex(&nonce);

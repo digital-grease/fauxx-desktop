@@ -26,7 +26,7 @@ use iced::Task;
 
 use crate::bg;
 use crate::message::{Message, PersonaEnumField, PersonaTextField, TrayMessage};
-use crate::state::{App, AppState, PrivacyTab, WizardStep};
+use crate::state::{App, AppState, PrivacyTab, UpdateProbe, WizardStep};
 
 /// The inclusive interest-count rule a well-formed persona carries (mirrors
 /// `fauxx_core::persona::INTEREST_COUNT`, which is not re-exported at the crate
@@ -111,6 +111,9 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
             app.state = AppState::Devices {
                 snapshot: None,
                 busy: true,
+                pair_back_input: String::new(),
+                pair_back_note: None,
+                copy_note: None,
             };
             Task::perform(bg::load_devices(app.core.clone()), Message::DevicesLoaded)
         }
@@ -135,7 +138,7 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
         }
 
         Message::DevicesLoaded(result) => {
-            let AppState::Devices { snapshot, busy } = &mut app.state else {
+            let AppState::Devices { snapshot, busy, .. } = &mut app.state else {
                 // The user navigated away before the load resolved; drop it.
                 return Task::none();
             };
@@ -159,7 +162,7 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
         }
 
         Message::ModeSet(result) => {
-            let AppState::Devices { snapshot, busy } = &mut app.state else {
+            let AppState::Devices { snapshot, busy, .. } = &mut app.state else {
                 return Task::none();
             };
             *busy = false;
@@ -199,6 +202,170 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
                     Task::none()
                 }
             }
+        }
+
+        Message::DevicePairBackChanged(text) => {
+            if let AppState::Devices {
+                pair_back_input, ..
+            } = &mut app.state
+            {
+                *pair_back_input = text;
+            }
+            Task::none()
+        }
+
+        Message::DevicePairBack => {
+            let AppState::Devices {
+                busy,
+                pair_back_input,
+                pair_back_note,
+                ..
+            } = &mut app.state
+            else {
+                return Task::none();
+            };
+            if *busy {
+                return Task::none();
+            }
+            let payload = pair_back_input.trim().to_string();
+            if payload.is_empty() {
+                *pair_back_note =
+                    Some("Paste the pairing code from the other device first.".to_string());
+                return Task::none();
+            }
+            *busy = true;
+            *pair_back_note = None;
+            Task::perform(
+                bg::pair_back(app.core.clone(), payload),
+                Message::DevicePairedBack,
+            )
+        }
+
+        Message::DevicePairedBack(result) => {
+            let AppState::Devices {
+                busy,
+                pair_back_input,
+                pair_back_note,
+                ..
+            } = &mut app.state
+            else {
+                return Task::none();
+            };
+            match result {
+                // Clear the input and reload so the newly paired device shows in
+                // the peer list. `busy` stays set until that reload resolves.
+                Ok(note) => {
+                    *pair_back_input = String::new();
+                    *pair_back_note = Some(note);
+                    Task::perform(bg::load_devices(app.core.clone()), Message::DevicesLoaded)
+                }
+                Err(err) => {
+                    *busy = false;
+                    *pair_back_note = Some(format!("Pairing failed: {err}"));
+                    Task::none()
+                }
+            }
+        }
+
+        // Clipboard copies (issue #38). `iced::clipboard::write` is a Task, so
+        // the confirmation rides back as a follow-up message rather than being
+        // set here: that keeps the note and the actual write in the same order
+        // the user perceives them.
+        Message::DeviceCopyPairingCode => {
+            let AppState::Devices { snapshot, .. } = &app.state else {
+                return Task::none();
+            };
+            let Some(code) = snapshot
+                .as_ref()
+                .and_then(|s| s.pairing_qr.as_ref().map(|qr| qr.payload.clone()))
+            else {
+                // No store open yet, so there is no code to copy. Say so rather
+                // than silently doing nothing.
+                return Task::done(Message::DeviceCopied(
+                    "No pairing code yet. Open the encrypted store first.".to_string(),
+                ));
+            };
+            Task::batch([
+                iced::clipboard::write(code),
+                Task::done(Message::DeviceCopied(
+                    "Pairing code copied. Paste it into the phone's Sync screen.".to_string(),
+                )),
+            ])
+        }
+
+        Message::DeviceCopyEndpoint(endpoint) => Task::batch([
+            iced::clipboard::write(endpoint.clone()),
+            Task::done(Message::DeviceCopied(format!(
+                "Copied {endpoint}. Enter it on the phone as a manual address."
+            ))),
+        ]),
+
+        Message::DeviceCopied(note) => {
+            let AppState::Devices { copy_note, .. } = &mut app.state else {
+                return Task::none();
+            };
+            *copy_note = Some(note);
+            Task::none()
+        }
+
+        // --- user-initiated update check ------------------------------------
+        Message::CheckForUpdate => {
+            // Bump FIRST, so this press supersedes any check still in flight from
+            // a previous visit to this screen; that older task's result will not
+            // match and will be dropped.
+            app.update_generation = app.update_generation.wrapping_add(1);
+            let generation = app.update_generation;
+            let AppState::Settings { update, .. } = &mut app.state else {
+                return Task::none();
+            };
+            // Coalesce: a second press while one is in flight must not fire a
+            // second request at GitHub.
+            if matches!(update, UpdateProbe::Checking) {
+                return Task::none();
+            }
+            *update = UpdateProbe::Checking;
+            Task::perform(bg::check_for_update(), move |result| {
+                Message::UpdateChecked(generation, result)
+            })
+        }
+
+        Message::UpdateChecked(generation, result) => {
+            // Drop a result from a superseded check. Without this, leaving and
+            // re-entering Settings (which resets the probe to Idle) lets an older,
+            // slower check overwrite a newer successful one, replacing a real
+            // "update available" and its download link with a stale connectivity
+            // failure on a machine that is demonstrably online.
+            if generation != app.update_generation {
+                return Task::none();
+            }
+            let AppState::Settings { update, .. } = &mut app.state else {
+                return Task::none();
+            };
+            *update = match result {
+                Ok(check) => UpdateProbe::Done {
+                    summary: check.summary(),
+                    url: Some(check.release_url),
+                    available: check.status == fauxx_core::UpdateStatus::UpdateAvailable,
+                    note: None,
+                },
+                Err(err) => UpdateProbe::Failed(err),
+            };
+            Task::none()
+        }
+
+        Message::CopyReleaseLink(url) => Task::batch([
+            iced::clipboard::write(url),
+            Task::done(Message::ReleaseLinkCopied),
+        ]),
+
+        Message::ReleaseLinkCopied => {
+            let AppState::Settings { update, .. } = &mut app.state else {
+                return Task::none();
+            };
+            if let UpdateProbe::Done { note, .. } = update {
+                *note = Some("Link copied. Paste it into your browser to download.".to_string());
+            }
+            Task::none()
         }
 
         // --- C4 #20 A1 efficacy dashboard ----------------------------------
@@ -914,6 +1081,23 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
             )
         }
 
+        Message::NetworkSetPorts(ports) => {
+            let AppState::Network { busy, snapshot } = &mut app.state else {
+                return Task::none();
+            };
+            if *busy {
+                return Task::none();
+            }
+            let Some(pid) = network_selection(snapshot.as_ref()) else {
+                return Task::none();
+            };
+            *busy = true;
+            Task::perform(
+                bg::set_egress_ports(app.core.clone(), pid, ports),
+                Message::NetworkSaved,
+            )
+        }
+
         Message::NetworkSaved(result) => {
             let AppState::Network { busy, snapshot } = &mut app.state else {
                 return Task::none();
@@ -1139,10 +1323,17 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
                 .sync_port
                 .map(|p| p.to_string())
                 .unwrap_or_default();
+            // Re-entering Settings presents a fresh, idle probe, so any check
+            // still in flight from a previous visit is now orphaned: invalidate
+            // it, or its late result would land in this screen as though the
+            // user had just asked for it.
+            app.update_generation = app.update_generation.wrapping_add(1);
             app.state = AppState::Settings {
                 draft: app.prefs.clone(),
                 port_text,
                 busy: false,
+                // Opening Settings never checks; the probe rests until pressed.
+                update: UpdateProbe::Idle,
             };
             Task::none()
         }
@@ -1205,6 +1396,7 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
                 draft,
                 port_text,
                 busy,
+                ..
             } = &mut app.state
             else {
                 return Task::none();
@@ -1398,7 +1590,8 @@ fn toggle_interest(persona: &mut fauxx_core::SyntheticPersona, name: &str) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fauxx_core::Core;
+    use crate::message::DevicesSnapshot;
+    use fauxx_core::{CoordinationMode, Core};
 
     /// A storeless app in the default boot state; the reducer mutates it
     /// synchronously and we ignore the async `Task` it returns.
@@ -1415,7 +1608,8 @@ mod tests {
                 app.state,
                 AppState::Devices {
                     snapshot: None,
-                    busy: true
+                    busy: true,
+                    ..
                 }
             ),
             "OpenDevices must switch to a loading Devices screen"
@@ -1428,6 +1622,9 @@ mod tests {
         app.state = AppState::Devices {
             snapshot: None,
             busy: true,
+            pair_back_input: String::new(),
+            pair_back_note: None,
+            copy_note: None,
         };
         let _ = update(&mut app, Message::DevicesLoaded(Err("boom".to_string())));
         // The screen is kept (non-fatal); the busy flag clears; the error shows
@@ -1581,6 +1778,471 @@ mod tests {
                 assert!(busy, "selecting a device starts a reload");
             }
             _ => panic!("must stay on the Dashboard"),
+        }
+    }
+
+    /// A Devices screen with the given pair-back state, for the #42 symmetric-
+    /// pairing reducer tests.
+    fn devices_state(busy: bool, input: &str) -> AppState {
+        AppState::Devices {
+            snapshot: None,
+            busy,
+            pair_back_input: input.to_string(),
+            pair_back_note: None,
+            copy_note: None,
+        }
+    }
+
+    /// A Devices screen holding a loaded snapshot, for the #38 copy tests.
+    fn devices_state_with_snapshot(snapshot: DevicesSnapshot) -> AppState {
+        AppState::Devices {
+            snapshot: Some(snapshot),
+            busy: false,
+            pair_back_input: String::new(),
+            pair_back_note: None,
+            copy_note: None,
+        }
+    }
+
+    /// A snapshot carrying the given dialable endpoints and no pairing QR.
+    fn devices_snapshot(local_endpoints: Vec<String>) -> DevicesSnapshot {
+        DevicesSnapshot {
+            pairing_qr: None,
+            fingerprint: None,
+            paired: Vec::new(),
+            discovered: Vec::new(),
+            mode: CoordinationMode::default(),
+            local_endpoints,
+        }
+    }
+
+    #[test]
+    fn copying_an_endpoint_confirms_which_address_was_copied() {
+        // #38: the confirmation has to name the address, because the user is
+        // about to type it into a phone and needs to know which one they got.
+        let mut app = app();
+        app.state =
+            devices_state_with_snapshot(devices_snapshot(vec!["192.168.1.50:45999".to_string()]));
+        let _ = update(
+            &mut app,
+            Message::DeviceCopyEndpoint("192.168.1.50:45999".to_string()),
+        );
+        // The clipboard write is a Task; the note arrives as the follow-up.
+        let _ = update(
+            &mut app,
+            Message::DeviceCopied(
+                "Copied 192.168.1.50:45999. Enter it on the phone as a manual address.".to_string(),
+            ),
+        );
+        match &app.state {
+            AppState::Devices { copy_note, .. } => {
+                let note = copy_note.as_deref().unwrap_or_default();
+                assert!(
+                    note.contains("192.168.1.50:45999"),
+                    "the confirmation must name the address, got {note:?}"
+                );
+            }
+            other => panic!(
+                "must stay on Devices, got {:?}",
+                std::mem::discriminant(other)
+            ),
+        }
+    }
+
+    #[test]
+    fn copying_the_pairing_code_without_a_store_explains_why_nothing_happened() {
+        // #38: with no store open there is no code. Saying so beats a dead
+        // button that silently does nothing.
+        let mut app = app();
+        app.state = devices_state_with_snapshot(devices_snapshot(Vec::new()));
+        let _ = update(&mut app, Message::DeviceCopyPairingCode);
+        let _ = update(
+            &mut app,
+            Message::DeviceCopied(
+                "No pairing code yet. Open the encrypted store first.".to_string(),
+            ),
+        );
+        match &app.state {
+            AppState::Devices { copy_note, .. } => {
+                let note = copy_note.as_deref().unwrap_or_default();
+                assert!(
+                    note.contains("No pairing code"),
+                    "must explain the empty state, got {note:?}"
+                );
+            }
+            other => panic!(
+                "must stay on Devices, got {:?}",
+                std::mem::discriminant(other)
+            ),
+        }
+    }
+
+    #[test]
+    fn a_copy_confirmation_replaces_the_previous_one() {
+        // Two copies in a row must not stack notes; the latest is the truth.
+        let mut app = app();
+        app.state = devices_state_with_snapshot(devices_snapshot(Vec::new()));
+        let _ = update(&mut app, Message::DeviceCopied("first".to_string()));
+        let _ = update(&mut app, Message::DeviceCopied("second".to_string()));
+        match &app.state {
+            AppState::Devices { copy_note, .. } => {
+                assert_eq!(copy_note.as_deref(), Some("second"));
+            }
+            other => panic!(
+                "must stay on Devices, got {:?}",
+                std::mem::discriminant(other)
+            ),
+        }
+    }
+
+    #[test]
+    fn a_copy_outside_the_devices_screen_is_ignored() {
+        // Defensive: a stale message must not panic or corrupt another screen.
+        let mut app = app();
+        app.state = AppState::Loading;
+        let _ = update(&mut app, Message::DeviceCopied("stray".to_string()));
+        assert!(matches!(app.state, AppState::Loading));
+    }
+
+    // --- user-initiated update check ---------------------------------------
+
+    /// A Settings screen with the given probe state.
+    fn settings_state(update: UpdateProbe) -> AppState {
+        AppState::Settings {
+            draft: crate::prefs::DesktopSettings::default(),
+            port_text: String::new(),
+            busy: false,
+            update,
+        }
+    }
+
+    fn probe(app: &App) -> UpdateProbe {
+        match &app.state {
+            AppState::Settings { update, .. } => update.clone(),
+            other => panic!(
+                "must stay on Settings, got {:?}",
+                std::mem::discriminant(other)
+            ),
+        }
+    }
+
+    /// The whole privacy claim rests on this: opening Settings must not check.
+    #[test]
+    fn opening_settings_does_not_start_a_check() {
+        let mut app = app();
+        let _ = update(&mut app, Message::OpenSettings);
+        match &app.state {
+            AppState::Settings { update, .. } => assert!(
+                matches!(update, UpdateProbe::Idle),
+                "Settings must open idle, got {update:?}"
+            ),
+            other => panic!("expected Settings, got {:?}", std::mem::discriminant(other)),
+        }
+    }
+
+    #[test]
+    fn pressing_the_button_moves_the_probe_to_checking() {
+        let mut app = app();
+        app.state = settings_state(UpdateProbe::Idle);
+        let _ = update(&mut app, Message::CheckForUpdate);
+        assert!(matches!(probe(&app), UpdateProbe::Checking));
+    }
+
+    /// A second press while a request is in flight must not fire a second
+    /// request at GitHub.
+    #[test]
+    fn a_second_press_while_checking_is_ignored() {
+        let mut app = app();
+        app.state = settings_state(UpdateProbe::Checking);
+        let _ = update(&mut app, Message::CheckForUpdate);
+        assert!(matches!(probe(&app), UpdateProbe::Checking));
+    }
+
+    #[test]
+    fn an_available_update_is_reported_with_a_link() {
+        let mut app = app();
+        app.state = settings_state(UpdateProbe::Checking);
+        let check = fauxx_core::UpdateCheck {
+            current: "0.2.1".to_string(),
+            latest: "0.3.0".to_string(),
+            status: fauxx_core::UpdateStatus::UpdateAvailable,
+            release_url: "https://example.invalid/releases/tag/v0.3.0".to_string(),
+        };
+        let gen = app.update_generation;
+        let _ = update(&mut app, Message::UpdateChecked(gen, Ok(check)));
+        match probe(&app) {
+            UpdateProbe::Done {
+                summary,
+                url,
+                available,
+                ..
+            } => {
+                assert!(available, "an available update must be flagged");
+                assert!(summary.contains("0.3.0"), "{summary}");
+                assert_eq!(
+                    url.as_deref(),
+                    Some("https://example.invalid/releases/tag/v0.3.0")
+                );
+            }
+            other => panic!("expected Done, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn being_up_to_date_is_reported_without_a_download_route() {
+        let mut app = app();
+        app.state = settings_state(UpdateProbe::Checking);
+        let check = fauxx_core::UpdateCheck {
+            current: "0.3.0".to_string(),
+            latest: "0.3.0".to_string(),
+            status: fauxx_core::UpdateStatus::UpToDate,
+            release_url: "https://example.invalid/releases/tag/v0.3.0".to_string(),
+        };
+        let gen = app.update_generation;
+        let _ = update(&mut app, Message::UpdateChecked(gen, Ok(check)));
+        match probe(&app) {
+            UpdateProbe::Done { available, .. } => {
+                assert!(!available, "up-to-date must not offer a download")
+            }
+            other => panic!("expected Done, got {other:?}"),
+        }
+    }
+
+    /// A failed check must read as a failure. Falling back to "up to date"
+    /// would be silently wrong in the reassuring direction.
+    #[test]
+    fn a_failed_check_surfaces_the_reason_and_never_claims_up_to_date() {
+        let mut app = app();
+        app.state = settings_state(UpdateProbe::Checking);
+        let gen = app.update_generation;
+        let _ = update(
+            &mut app,
+            Message::UpdateChecked(
+                gen,
+                Err("could not reach GitHub. Are you online?".to_string()),
+            ),
+        );
+        match probe(&app) {
+            UpdateProbe::Failed(reason) => {
+                assert!(reason.contains("Are you online?"), "{reason}");
+                assert!(
+                    !reason.to_ascii_lowercase().contains("up to date"),
+                    "{reason}"
+                );
+            }
+            other => panic!("expected Failed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn copying_the_release_link_confirms_it() {
+        let mut app = app();
+        app.state = settings_state(UpdateProbe::Done {
+            summary: "Version 0.3.0 is available. You have 0.2.1.".to_string(),
+            url: Some("https://example.invalid/r".to_string()),
+            available: true,
+            note: None,
+        });
+        let _ = update(
+            &mut app,
+            Message::CopyReleaseLink("https://example.invalid/r".to_string()),
+        );
+        let _ = update(&mut app, Message::ReleaseLinkCopied);
+        match probe(&app) {
+            UpdateProbe::Done { note, .. } => {
+                assert!(note.unwrap_or_default().contains("copied"))
+            }
+            other => panic!("expected Done, got {other:?}"),
+        }
+    }
+
+    /// The #3 finding from the adversarial sweep. Leaving and re-entering
+    /// Settings orphans an in-flight check; its late result must not overwrite
+    /// the fresh screen, and must not be able to replace a newer successful
+    /// check with a stale failure.
+    #[test]
+    fn a_result_from_a_superseded_check_is_dropped() {
+        let mut app = app();
+        app.state = settings_state(UpdateProbe::Idle);
+
+        // Press once: check A is issued under the current generation.
+        let _ = update(&mut app, Message::CheckForUpdate);
+        let generation_a = app.update_generation;
+        assert!(matches!(probe(&app), UpdateProbe::Checking));
+
+        // The user leaves and re-enters Settings, which resets the probe.
+        let _ = update(&mut app, Message::OpenSettings);
+        assert!(matches!(probe(&app), UpdateProbe::Idle));
+
+        // Press again: check B supersedes A.
+        let _ = update(&mut app, Message::CheckForUpdate);
+        let generation_b = app.update_generation;
+        assert_ne!(
+            generation_a, generation_b,
+            "each press must get its own token"
+        );
+
+        // B lands first with a real update.
+        let check = fauxx_core::UpdateCheck {
+            current: "0.2.1".to_string(),
+            latest: "0.3.0".to_string(),
+            status: fauxx_core::UpdateStatus::UpdateAvailable,
+            release_url: "https://example.invalid/r".to_string(),
+        };
+        let _ = update(&mut app, Message::UpdateChecked(generation_b, Ok(check)));
+
+        // Now A finally fails. It must be ignored, not applied.
+        let _ = update(
+            &mut app,
+            Message::UpdateChecked(
+                generation_a,
+                Err("could not reach GitHub to check for updates. Are you online?".to_string()),
+            ),
+        );
+
+        match probe(&app) {
+            UpdateProbe::Done { available, url, .. } => {
+                assert!(available, "the newer successful result must survive");
+                assert_eq!(url.as_deref(), Some("https://example.invalid/r"));
+            }
+            other => panic!("a stale failure overwrote a newer success: {other:?}"),
+        }
+    }
+
+    /// Re-entering Settings must invalidate the orphaned check outright, so its
+    /// result cannot land in the fresh screen even if the user presses nothing.
+    #[test]
+    fn re_entering_settings_invalidates_an_orphaned_check() {
+        let mut app = app();
+        app.state = settings_state(UpdateProbe::Idle);
+        let _ = update(&mut app, Message::CheckForUpdate);
+        let orphaned = app.update_generation;
+
+        let _ = update(&mut app, Message::OpenSettings);
+        let _ = update(
+            &mut app,
+            Message::UpdateChecked(orphaned, Err("stale failure".to_string())),
+        );
+        assert!(
+            matches!(probe(&app), UpdateProbe::Idle),
+            "an orphaned result must leave the fresh screen idle, got {:?}",
+            probe(&app)
+        );
+    }
+
+    #[test]
+    fn an_update_message_outside_settings_is_ignored() {
+        let mut app = app();
+        app.state = AppState::Loading;
+        let _ = update(&mut app, Message::CheckForUpdate);
+        let _ = update(&mut app, Message::ReleaseLinkCopied);
+        assert!(matches!(app.state, AppState::Loading));
+    }
+
+    #[test]
+    fn device_pair_back_changed_updates_the_input() {
+        // #42: typing in the "Pair a device back" field records the payload.
+        let mut app = app();
+        app.state = devices_state(false, "");
+        let _ = update(
+            &mut app,
+            Message::DevicePairBackChanged("code-123".to_string()),
+        );
+        match &app.state {
+            AppState::Devices {
+                pair_back_input, ..
+            } => assert_eq!(pair_back_input, "code-123"),
+            other => panic!(
+                "must stay on Devices, got {:?}",
+                std::mem::discriminant(other)
+            ),
+        }
+    }
+
+    #[test]
+    fn device_pair_back_with_blank_input_sets_a_hint_and_stays_idle() {
+        // #42: submitting an empty/whitespace payload must not start work; it
+        // nudges the user to paste a code instead.
+        let mut app = app();
+        app.state = devices_state(false, "   ");
+        let _ = update(&mut app, Message::DevicePairBack);
+        match &app.state {
+            AppState::Devices {
+                busy,
+                pair_back_note,
+                ..
+            } => {
+                assert!(!busy, "a blank submit must not set busy");
+                assert!(
+                    pair_back_note
+                        .as_deref()
+                        .unwrap_or_default()
+                        .contains("Paste"),
+                    "note should prompt for a code, got {pair_back_note:?}"
+                );
+            }
+            other => panic!(
+                "must stay on Devices, got {:?}",
+                std::mem::discriminant(other)
+            ),
+        }
+    }
+
+    #[test]
+    fn device_paired_back_ok_clears_input_and_notes_success() {
+        // #42: a successful pair-back clears the field and shows the summary; the
+        // screen stays busy while it reloads to show the new peer.
+        let mut app = app();
+        app.state = devices_state(true, "some-code");
+        let _ = update(
+            &mut app,
+            Message::DevicePairedBack(Ok("Paired Phone (ab:cd).".to_string())),
+        );
+        match &app.state {
+            AppState::Devices {
+                pair_back_input,
+                pair_back_note,
+                ..
+            } => {
+                assert!(pair_back_input.is_empty(), "input must clear on success");
+                assert_eq!(pair_back_note.as_deref(), Some("Paired Phone (ab:cd)."));
+            }
+            other => panic!(
+                "must stay on Devices, got {:?}",
+                std::mem::discriminant(other)
+            ),
+        }
+    }
+
+    #[test]
+    fn device_paired_back_err_sets_note_and_clears_busy() {
+        // #42: a failed pair-back surfaces the reason inline and re-enables the
+        // control (busy clears) so the user can correct the code.
+        let mut app = app();
+        app.state = devices_state(true, "bad-code");
+        let _ = update(
+            &mut app,
+            Message::DevicePairedBack(Err("invalid pairing payload".to_string())),
+        );
+        match &app.state {
+            AppState::Devices {
+                busy,
+                pair_back_note,
+                ..
+            } => {
+                assert!(!busy, "busy must clear on failure");
+                assert!(
+                    pair_back_note
+                        .as_deref()
+                        .unwrap_or_default()
+                        .contains("invalid pairing payload"),
+                    "note should carry the failure reason, got {pair_back_note:?}"
+                );
+            }
+            other => panic!(
+                "must stay on Devices, got {:?}",
+                std::mem::discriminant(other)
+            ),
         }
     }
 }

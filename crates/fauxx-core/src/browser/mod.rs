@@ -406,6 +406,10 @@ pub struct DecoyBrowser {
     /// browser (D4c #18). Carried from the launch config so every
     /// [`new_page`](Self::new_page) applies it consistently.
     gpc_enabled: bool,
+    /// The outbound port policy for decoy traffic (#40). Carried from the
+    /// launch config so every [`new_page`](Self::new_page) enforces the same
+    /// rule, checked per navigation rather than trusted at launch.
+    egress_ports: crate::network::EgressPorts,
     /// The persona's stable DESKTOP device identity (#47), applied to every page
     /// opened from this browser: the UA + full client-hint metadata, screen/DPR, and
     /// fixed navigator values, over CDP. Carried from the launch config so every
@@ -522,6 +526,7 @@ impl DecoyBrowser {
             handler_task: Some(handler_task),
             user_data_dir: decoy_dir,
             gpc_enabled: config.gpc_enabled,
+            egress_ports: config.network.ports,
             device: config.device.clone(),
             proxy_credentials,
         })
@@ -574,7 +579,10 @@ impl DecoyBrowser {
                 CoreError::Browser(format!("applying decoy proxy authentication failed: {e}"))
             })?;
         }
-        let decoy = DecoyPage { page };
+        let decoy = DecoyPage {
+            page,
+            egress_ports: self.egress_ports,
+        };
         // Apply the persona's stable DESKTOP device identity FIRST, before any
         // navigation, so the very first request carries the coherent UA + client
         // hints and never the headless default (#47).
@@ -689,6 +697,9 @@ impl PresentedDevice {
 #[derive(Debug)]
 pub struct DecoyPage {
     page: chromiumoxide::Page,
+    /// The outbound port policy this page's navigations are checked against
+    /// (#40). Inherited from the browser that opened the page.
+    egress_ports: crate::network::EgressPorts,
 }
 
 impl DecoyPage {
@@ -698,6 +709,10 @@ impl DecoyPage {
         // R3 guardrail: never drive a real sign-in flow from the decoy. This
         // logs the blocked attempt locally and returns a typed error.
         isolation::ensure_navigation_allowed(url)?;
+        // #40: when the user has restricted decoy egress to TCP/443, a target on
+        // any other port would be dropped by their firewall anyway. Refusing it
+        // here turns a silent hang into a typed error that names the port.
+        self.egress_ports.ensure_target_allowed(url)?;
 
         self.page
             .goto(url)

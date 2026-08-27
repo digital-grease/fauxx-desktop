@@ -88,10 +88,29 @@ There is no build step. The extension is plain JS/JSON/HTML/CSS.
 4. Note the generated extension id (you need it for the native host manifest).
 5. Click the toolbar icon and flip the toggle to opt in.
 
-### Firefox
+### Firefox (and forks: Waterfox, Floorp, LibreWolf, ...)
 1. Go to `about:debugging#/runtime/this-firefox`.
 2. Click **Load Temporary Add-on...** and select `extension/manifest.json`.
 3. Open the popup from the toolbar and flip the toggle to opt in.
+
+> **One directory, two background schemas.** Because there is no build step and
+> both engines load this same directory, `manifest.json` declares the background
+> entry point twice: `background.scripts` (what Gecko requires for an MV3 event
+> page) and `background.service_worker` (what Chromium requires). Both name the
+> same `src/background.js`, so the two engines run identical code.
+>
+> Chromium reads `service_worker` and ignores `scripts`; some versions note the
+> unused key as a manifest warning on load. That warning is expected and
+> harmless. Without the `scripts` key, every Firefox fork refuses the install
+> outright with `background.service_worker is currently disabled. Add
+> background.scripts.` (#39).
+>
+> Verified on Chromium 151: loading this directory unpacked produces no manifest
+> error, registers a service-worker background host, and runs `src/background.js`
+> (its startup line appears on the extension console). The control case, a
+> manifest carrying only `background.scripts`, loads without an error but never
+> runs the background script at all, which is why both keys are present rather
+> than just the Gecko one.
 
 > Icons referenced in the manifest (`icons/icon-48.png`, `icons/icon-128.png`)
 > are placeholders you can drop in; the extension loads and runs without them

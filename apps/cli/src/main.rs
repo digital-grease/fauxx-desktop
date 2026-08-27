@@ -104,6 +104,8 @@ async fn run(cli: Cli) -> std::result::Result<(), Failure> {
             json,
         } => commands::search::run(config, persona_id, decoy_id, json).await,
         Command::Status { json } => commands::status::run(config, json).await,
+        // No store, no config: the check reads nothing local.
+        Command::CheckUpdate { json } => commands::check_update::run(json).await,
         Command::Persona { command } => commands::persona::run(config, command).await,
         Command::Pair { command } => return dispatch_pair(config, command).await,
         Command::Peers { discovered, json } => commands::peers::run(config, discovered, json).await,

@@ -321,11 +321,18 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-fuzz
+      # `--target` is explicit on purpose. taiki-e/install-action fetches a
+      # prebuilt, statically linked (musl) cargo-fuzz, and cargo-fuzz defaults
+      # its target to the triple IT was built for, not the host's. Left implicit
+      # it therefore builds for x86_64-unknown-linux-musl, for which the nightly
+      # toolchain has no std, and every run dies with "can't find crate for
+      # `core`" before a single input is fuzzed.
       - name: smoke-fuzz each target
         run: |
           for target in scrubber sync_frame blocklist; do
             echo "::group::fuzz $target"
-            cargo +nightly fuzz run "$target" -- -max_total_time=120 -rss_limit_mb=4096
+            cargo +nightly fuzz run --target x86_64-unknown-linux-gnu "$target" \
+              -- -max_total_time=120 -rss_limit_mb=4096
             echo "::endgroup::"
           done
       - name: upload any crash corpus
