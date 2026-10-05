@@ -66,6 +66,12 @@ targets = [
 # owners (the "Windows installer / MSI" follow-up). Windows users still
 # get a signed .exe inside the zip archive plus the powershell installer.
 installers = ["shell", "powershell"]
+# The desktop binary embeds Noto Sans (apps/desktop/src/font.rs uses include_bytes!),
+# and OFL 1.1 clause 2 requires the licence and its copyright notice to accompany
+# every copy of the font software. dist's automatic includes only pick up files at
+# the workspace/package root (the AGPL LICENSE and README), so the font licence has
+# to be listed explicitly or the archives would ship the face with no licence.
+include = ["apps/desktop/assets/fonts/LICENSE-NotoSans.txt"]
 
 # Emit a SHA256 checksum file per artifact. Users verify downloads against
 # these (and against the GitHub attestations, see below).

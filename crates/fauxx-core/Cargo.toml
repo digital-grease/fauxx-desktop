@@ -1,7 +1,7 @@
 [package]
 name = "fauxx-core"
 description = "Fauxx desktop companion headless core: all real work behind a clean async API, with the Iced GUI and clap CLI as thin clients over it."
-version = "0.2.1"
+version = "0.3.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -52,6 +52,17 @@ dryoc = { workspace = true }
 # discovery (no Avahi/Bonjour system daemon). Behind the concrete transport so
 # the in-memory tests stay hermetic.
 mdns-sd = { workspace = true }
+# Enumerates this host's interface addresses so the pairing payload and the
+# Devices screen can offer a literal, dialable `IP:port` alongside the mDNS
+# `.local.` hint (#38).
+if-addrs = { workspace = true }
+# The user-initiated update check: one HTTPS GET to the GitHub releases API,
+# only ever on an explicit user action. See `crate::update`.
+reqwest = { workspace = true }
+rustls = { workspace = true }
+# WHATWG URL parsing for the #40 outbound-port guard; see the workspace manifest.
+url = { workspace = true }
+semver = { workspace = true }
 # QR generation for out-of-band pairing (the desktop renders its public key +
 # connection hint; the phone scans it). We use the always-available unicode
 # renderer plus `svg`; the root pin carries default features (including the

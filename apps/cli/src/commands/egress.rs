@@ -22,7 +22,7 @@
 //! (they live in the OS keystore via a dedicated core call).
 
 use anyhow::{bail, Context};
-use fauxx_core::{Config, Core, Egress};
+use fauxx_core::{Config, Core, Egress, EgressPorts};
 
 use crate::cli::{EgressCommand, EgressKindArg};
 
@@ -39,7 +39,36 @@ pub async fn run(config: Config, command: EgressCommand) -> anyhow::Result<()> {
         } => set(&core, &persona_id, kind, host, port, socks_addr).await,
         EgressCommand::Get { persona_id, json } => get(&core, &persona_id, json).await,
         EgressCommand::Clear { persona_id } => clear(&core, &persona_id).await,
+        EgressCommand::Ports { persona_id, policy } => ports(&core, &persona_id, policy).await,
     }
+}
+
+/// Bind a per-persona outbound port policy (#40).
+///
+/// The core validates the WHOLE resulting network config, so a restriction that
+/// contradicts the persona's DNS strategy or proxy port is refused here with a
+/// message naming the fix, rather than being stored and failing at launch.
+async fn ports(
+    core: &Core,
+    persona_id: &str,
+    policy: crate::cli::EgressPortsArg,
+) -> anyhow::Result<()> {
+    let ports = match policy {
+        crate::cli::EgressPortsArg::Unrestricted => EgressPorts::Unrestricted,
+        crate::cli::EgressPortsArg::Https443Only => EgressPorts::Https443Only,
+    };
+    core.set_persona_egress_ports(persona_id, ports).await?;
+    if ports.is_restricted() {
+        println!("{persona_id}: decoy traffic restricted to TCP/443 (QUIC disabled)");
+        println!(
+            "This applies to the decoy browser only. LAN sync (port {}) and mDNS device \
+             pairing are unaffected.",
+            fauxx_core::sync::DEFAULT_SYNC_PORT
+        );
+    } else {
+        println!("{persona_id}: outbound port restriction lifted");
+    }
+    Ok(())
 }
 
 /// Build the [`Egress`] from the CLI flags for a kind, failing closed on a

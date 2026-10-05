@@ -328,6 +328,19 @@ pub enum Command {
         command: CampaignCommand,
     },
 
+    /// Check whether a newer release is published.
+    ///
+    /// Makes ONE HTTPS request to the GitHub releases API, and only when you run
+    /// this command: nothing checks for updates on its own. GitHub sees the
+    /// requesting IP and a User-Agent carrying only the app name and version. It
+    /// reports what is available and does not download or install anything.
+    #[command(name = "check-update")]
+    CheckUpdate {
+        /// Emit the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Long-running headless homelab mode driven by a config file (C8 #35).
     Serve(ServeArgs),
 
@@ -852,6 +865,29 @@ pub enum EgressCommand {
         /// The persona id.
         persona_id: String,
     },
+    /// Restrict which outbound ports this persona's decoy traffic may use (#40).
+    ///
+    /// Restricting to TCP/443 also disables QUIC (which would carry the same
+    /// requests over UDP/443) and requires DNS-over-HTTPS, since the system
+    /// resolver (port 53) and DoT (port 853) would both be blocked by the very
+    /// firewall rule this exists to satisfy. It applies to the DECOY BROWSER
+    /// only: LAN sync and mDNS device pairing are untouched.
+    Ports {
+        /// The persona id.
+        persona_id: String,
+        /// The outbound port policy.
+        #[arg(value_enum)]
+        policy: EgressPortsArg,
+    },
+}
+
+/// The outbound port policies accepted on the CLI (#40).
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
+pub enum EgressPortsArg {
+    /// No port restriction (the default).
+    Unrestricted,
+    /// Confine decoy traffic to TCP port 443.
+    Https443Only,
 }
 
 /// The egress kinds accepted on the CLI (C7 #30).

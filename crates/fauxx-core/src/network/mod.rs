@@ -553,6 +553,147 @@ impl Default for DnsStrategy {
     }
 }
 
+// --- outbound port policy (#40) ----------------------------------------------
+
+/// Which outbound ports this persona's decoy traffic is allowed to use.
+///
+/// Requested in #40 by a user running behind a strict egress firewall: they
+/// allow outbound TCP/443 and nothing else, and would otherwise have to widen
+/// their firewall for the decoy to work. Tor's `ReachablePort` is the same idea.
+///
+/// # Scope: the decoy browser, not the whole process
+///
+/// This constrains only where the *decoy* connects. It deliberately does not
+/// touch LAN sync, which binds [`DEFAULT_SYNC_PORT`](crate::sync::DEFAULT_SYNC_PORT)
+/// and relies on mDNS multicast on UDP/5353. Applying "443 only" process-wide
+/// would silently break device pairing, so the restriction stops at the browser
+/// where the user's firewall concern actually lives.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum EgressPorts {
+    /// No port restriction: the decoy connects wherever a target resolves to.
+    #[default]
+    Unrestricted,
+    /// Decoy traffic is confined to TCP port 443.
+    ///
+    /// Three things follow from this, all enforced rather than assumed:
+    /// navigation targets must be HTTPS on the default port; QUIC is disabled,
+    /// because it would carry the same traffic over UDP/443 and the request is
+    /// specifically for TCP; and the DNS strategy must itself ride 443, which
+    /// means DoH (see [`validate_network`]).
+    Https443Only,
+}
+
+/// The port every HTTPS URL uses unless it says otherwise.
+const HTTPS_PORT: u16 = 443;
+
+impl EgressPorts {
+    /// Whether this policy restricts outbound ports at all.
+    pub fn is_restricted(&self) -> bool {
+        matches!(self, EgressPorts::Https443Only)
+    }
+
+    /// Extra Chromium flags this policy needs.
+    ///
+    /// `--disable-quic` is the load-bearing one: without it Chromium will
+    /// happily carry the same HTTPS request over QUIC on UDP/443, which is
+    /// exactly the outbound traffic a TCP/443-only firewall drops.
+    pub fn chromium_args(&self) -> Vec<String> {
+        match self {
+            EgressPorts::Unrestricted => Vec::new(),
+            EgressPorts::Https443Only => vec!["--disable-quic".to_string()],
+        }
+    }
+
+    /// Check a navigation target against this policy, failing closed.
+    ///
+    /// Under [`Https443Only`](Self::Https443Only) a target must be `https://`
+    /// on port 443 (stated or implied). Loopback is exempt: it never reaches
+    /// the wire, so no firewall rule applies to it, and the live browser tests
+    /// drive a local fixture.
+    ///
+    /// # Why this parses with `url` instead of reading the string
+    ///
+    /// An earlier version of this function picked the port out of the authority
+    /// by hand. That is unsafe here for a specific and non-obvious reason: the
+    /// thing that ultimately opens the socket is Chromium, which implements the
+    /// WHATWG URL standard, and the WHATWG parser is far more forgiving than any
+    /// straightforward string scan. Every byte Chromium strips or treats as an
+    /// authority terminator — a trailing space, an embedded tab or newline, a
+    /// backslash — makes a hand-rolled port scan fail to find a port, and a
+    /// "no port stated" result reads as "port 443, allow". The control then
+    /// admits the exact URL it exists to refuse, while Chromium happily dials
+    /// the other port. Concretely, all three of these were admitted:
+    ///
+    /// - `https://tracker.example.com:8080\` (backslash terminates the authority)
+    /// - `https://tracker.example.com:8080 ` (trailing space is stripped)
+    /// - `https://tracker.example.com:80\t80/` (tab is removed, port becomes 8080)
+    ///
+    /// Parsing with the same standard the browser implements removes that whole
+    /// class of divergence. A target that cannot be parsed at all is REFUSED
+    /// rather than admitted, because a port we cannot read is a port we cannot
+    /// promise anything about.
+    pub fn ensure_target_allowed(&self, url: &str) -> Result<()> {
+        if !self.is_restricted() {
+            return Ok(());
+        }
+
+        let parsed = url::Url::parse(url).map_err(|e| {
+            CoreError::Network(format!(
+                "refusing decoy navigation to {url}: outbound traffic is restricted to \
+                 TCP/443 and this target could not be parsed as a URL ({e}), so its port \
+                 cannot be verified"
+            ))
+        })?;
+
+        // Schemes that carry no host and open no socket.
+        if matches!(parsed.scheme(), "about" | "data" | "blob" | "javascript") {
+            return Ok(());
+        }
+
+        // Loopback never reaches the wire, so no firewall rule applies. Taken
+        // from the PARSED host, so userinfo cannot smuggle a loopback-looking
+        // string in front of a real host (`http://127.0.0.1@evil.example/`
+        // has host `evil.example`).
+        if is_loopback_host(parsed.host()) {
+            return Ok(());
+        }
+
+        if parsed.scheme() != "https" {
+            return Err(CoreError::Network(format!(
+                "refusing decoy navigation to {url}: outbound traffic is restricted to \
+                 TCP/443, so only https:// targets are allowed"
+            )));
+        }
+
+        // `port_or_known_default` supplies 443 for an https URL that states no
+        // port, which is exactly the "stated or implied" rule.
+        match parsed.port_or_known_default() {
+            Some(HTTPS_PORT) => Ok(()),
+            Some(port) => Err(CoreError::Network(format!(
+                "refusing decoy navigation to {url}: outbound traffic is restricted to \
+                 TCP/443, but this target is on port {port}"
+            ))),
+            None => Err(CoreError::Network(format!(
+                "refusing decoy navigation to {url}: outbound traffic is restricted to \
+                 TCP/443 and this target states no port that could be verified"
+            ))),
+        }
+    }
+}
+
+/// Whether a parsed host is loopback, which never leaves the machine.
+fn is_loopback_host(host: Option<url::Host<&str>>) -> bool {
+    match host {
+        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+        // The WHATWG parser lowercases and IDNA-normalizes the host, so an exact
+        // compare is sound here.
+        Some(url::Host::Domain(name)) => name == "localhost",
+        None => false,
+    }
+}
+
 // --- combined per-persona network config -------------------------------------
 
 /// The combined per-persona network configuration: its [`Egress`] and its
@@ -565,12 +706,40 @@ pub struct PersonaNetwork {
     pub egress: Egress,
     /// How this persona's decoy browser resolves DNS.
     pub dns: DnsStrategy,
+    /// Which outbound ports this persona's decoy traffic may use (#40).
+    ///
+    /// Additive: omitted from serialized configs when unrestricted, so a config
+    /// written before this field existed loads unchanged.
+    #[serde(default, skip_serializing_if = "is_unrestricted")]
+    pub ports: EgressPorts,
+}
+
+/// Serde helper: an unrestricted port policy is the default, so it is omitted.
+fn is_unrestricted(ports: &EgressPorts) -> bool {
+    !ports.is_restricted()
 }
 
 impl PersonaNetwork {
-    /// A network config with the given egress and DNS strategy.
+    /// A network config with the given egress and DNS strategy, with no
+    /// outbound port restriction.
     pub fn new(egress: Egress, dns: DnsStrategy) -> Self {
-        Self { egress, dns }
+        Self {
+            egress,
+            dns,
+            ports: EgressPorts::Unrestricted,
+        }
+    }
+
+    /// Restrict this persona's decoy traffic to TCP/443 (#40).
+    ///
+    /// Validate with [`validate_network`] before applying: the restriction is
+    /// incoherent with a DNS strategy or proxy that leaves port 443, and
+    /// failing closed there is better than silently emitting traffic the user's
+    /// firewall will drop.
+    #[must_use]
+    pub fn with_ports(mut self, ports: EgressPorts) -> Self {
+        self.ports = ports;
+        self
     }
 
     /// The combined Chromium argument list this config emits, in deterministic
@@ -582,6 +751,7 @@ impl PersonaNetwork {
             args.push(proxy);
         }
         args.extend(self.dns.chromium_dns_args());
+        args.extend(self.ports.chromium_args());
         args
     }
 
@@ -660,6 +830,80 @@ pub fn validate_dns(dns: &DnsStrategy) -> Result<()> {
             }
             Ok(())
         }
+    }
+}
+
+/// Validate a whole [`PersonaNetwork`], including the cross-field coherence a
+/// per-field check cannot see.
+///
+/// The egress and DNS strategy are each valid in isolation but can contradict
+/// the port policy: restricting decoy traffic to TCP/443 (#40) while resolving
+/// over plain DNS (UDP/53), DoT (TCP/853), or through a proxy on some other
+/// port means the very first lookup or connection is dropped by the firewall
+/// the restriction exists to satisfy. Failing closed here, with a message that
+/// names the fix, beats a decoy that silently never loads a page.
+pub fn validate_network(network: &PersonaNetwork) -> Result<()> {
+    validate_egress(&network.egress)?;
+    validate_dns(&network.dns)?;
+
+    if !network.ports.is_restricted() {
+        return Ok(());
+    }
+
+    match &network.dns {
+        // DoH is the only strategy that rides 443 like the traffic it resolves.
+        DnsStrategy::Doh { .. } => {}
+        DnsStrategy::SystemDefault => {
+            return Err(CoreError::Network(
+                "restricting decoy traffic to TCP/443 requires DNS-over-HTTPS: the system \
+                 resolver uses port 53, which the restriction would block. Set the DNS \
+                 strategy to DoH."
+                    .to_string(),
+            ));
+        }
+        DnsStrategy::Dot { .. } => {
+            return Err(CoreError::Network(
+                "restricting decoy traffic to TCP/443 requires DNS-over-HTTPS: DNS-over-TLS \
+                 uses port 853, which the restriction would block. Set the DNS strategy to \
+                 DoH."
+                    .to_string(),
+            ));
+        }
+    }
+
+    // A proxy is where every decoy connection actually goes, so its port is the
+    // one the firewall sees.
+    if let Some((endpoint, port)) = proxy_endpoint_port(&network.egress) {
+        if port != HTTPS_PORT {
+            return Err(CoreError::Network(format!(
+                "restricting decoy traffic to TCP/443 conflicts with the configured egress \
+                 {endpoint}: every decoy connection would go to port {port}. Use a proxy \
+                 listening on 443, or lift the port restriction."
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+/// The `host:port` and port of an egress that routes through a proxy, or `None`
+/// for a direct egress (which connects straight to the target on 443).
+fn proxy_endpoint_port(egress: &Egress) -> Option<(String, u16)> {
+    match egress {
+        Egress::Direct => None,
+        Egress::HttpProxy { host, port, .. } | Egress::SocksProxy { host, port, .. } => {
+            Some((format!("{host}:{port}"), *port))
+        }
+        Egress::Tor { socks_addr } => socks_addr
+            .rsplit_once(':')
+            .and_then(|(_, p)| p.parse().ok())
+            .map(|port| (socks_addr.clone(), port)),
+        Egress::Vpn {
+            local_proxy_addr, ..
+        } => local_proxy_addr
+            .rsplit_once(':')
+            .and_then(|(_, p)| p.parse().ok())
+            .map(|port| (local_proxy_addr.clone(), port)),
     }
 }
 
@@ -804,6 +1048,261 @@ mod tests {
         assert!(unreachable.is_reachable(&Egress::Direct).await);
         let reachable = StaticReachability::reachable();
         assert!(reachable.is_reachable(&Egress::tor()).await);
+    }
+
+    // --- #40 outbound port policy ------------------------------------------
+
+    #[test]
+    fn unrestricted_is_the_default_and_changes_nothing() {
+        let network = PersonaNetwork::default();
+        assert_eq!(network.ports, EgressPorts::Unrestricted);
+        assert!(!network.ports.is_restricted());
+        // Any target passes, including a non-443 port.
+        assert!(network
+            .ports
+            .ensure_target_allowed("https://example.com:8443/x")
+            .is_ok());
+        assert!(network.ports.chromium_args().is_empty());
+    }
+
+    #[test]
+    fn restricting_to_443_disables_quic() {
+        // QUIC would carry the same HTTPS request over UDP/443, which a
+        // TCP/443-only firewall drops. Without this flag the restriction is a
+        // lie.
+        let args = EgressPorts::Https443Only.chromium_args();
+        assert!(
+            args.iter().any(|a| a == "--disable-quic"),
+            "TCP/443-only must disable QUIC, got {args:?}"
+        );
+    }
+
+    #[test]
+    fn restricting_to_443_allows_ordinary_https_targets() {
+        let ports = EgressPorts::Https443Only;
+        assert!(ports.ensure_target_allowed("https://example.com/").is_ok());
+        assert!(ports
+            .ensure_target_allowed("https://example.com:443/path?q=1")
+            .is_ok());
+    }
+
+    #[test]
+    fn restricting_to_443_refuses_another_port_and_names_it() {
+        let Err(err) =
+            EgressPorts::Https443Only.ensure_target_allowed("https://example.com:8443/x")
+        else {
+            panic!("a non-443 port must be refused");
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("8443"), "the error must name the port: {msg}");
+    }
+
+    #[test]
+    fn restricting_to_443_refuses_plaintext_http() {
+        assert!(EgressPorts::Https443Only
+            .ensure_target_allowed("http://example.com/")
+            .is_err());
+    }
+
+    #[test]
+    fn restricting_to_443_still_permits_loopback_and_schemeless_targets() {
+        // Loopback never reaches the wire, so no firewall rule applies; the
+        // live browser tests drive a local fixture over it.
+        let ports = EgressPorts::Https443Only;
+        assert!(ports
+            .ensure_target_allowed("http://127.0.0.1:9222/json")
+            .is_ok());
+        assert!(ports
+            .ensure_target_allowed("http://localhost:8080/")
+            .is_ok());
+        assert!(ports.ensure_target_allowed("http://[::1]:8080/").is_ok());
+        assert!(ports.ensure_target_allowed("about:blank").is_ok());
+        assert!(ports.ensure_target_allowed("data:text/html,hi").is_ok());
+    }
+
+    #[test]
+    fn a_443_ipv6_literal_target_is_allowed() {
+        assert!(EgressPorts::Https443Only
+            .ensure_target_allowed("https://[2001:db8::1]:443/x")
+            .is_ok());
+        assert!(EgressPorts::Https443Only
+            .ensure_target_allowed("https://[2001:db8::1]/x")
+            .is_ok());
+    }
+
+    #[test]
+    fn a_non_443_ipv6_literal_target_is_refused() {
+        assert!(EgressPorts::Https443Only
+            .ensure_target_allowed("https://[2001:db8::1]:8443/x")
+            .is_err());
+    }
+
+    /// The bypasses an adversarial review found in the hand-rolled authority
+    /// parser this replaced. Each of these was ADMITTED while Chromium, which
+    /// implements the WHATWG URL standard, would still dial the stated non-443
+    /// port. A "port we could not read" must never read as "port 443".
+    #[test]
+    fn a_url_chromium_normalizes_cannot_slip_past_the_443_guard() {
+        let ports = EgressPorts::Https443Only;
+        for url in [
+            // Backslash terminates the authority for special schemes.
+            "https://tracker.example.com:8080\\",
+            // Leading/trailing C0-or-space is stripped before parsing.
+            "https://tracker.example.com:8080 ",
+            " https://tracker.example.com:8080/",
+            // ASCII tab / CR / LF are removed anywhere in the input, so this
+            // reassembles as port 8080.
+            "https://tracker.example.com:80\t80/",
+            "https://tracker.example.com:80\n80/",
+            // Userinfo must not be mistaken for the host or the port.
+            "https://user:443@tracker.example.com:8080/",
+        ] {
+            assert!(
+                ports.ensure_target_allowed(url).is_err(),
+                "must refuse {url:?}: Chromium would dial a non-443 port"
+            );
+        }
+    }
+
+    /// The inverse of the above: normalization must not start REFUSING targets
+    /// that are genuinely on 443, or the restriction becomes unusable.
+    #[test]
+    fn normalization_does_not_refuse_legitimate_443_targets() {
+        let ports = EgressPorts::Https443Only;
+        for url in [
+            "https://example.com",
+            "https://example.com/",
+            "https://example.com:443/path?q=1#frag",
+            // Leading zeros still denote 443.
+            "https://example.com:0443/",
+            "https://user:pw@example.com/",
+            "https://EXAMPLE.COM/",
+            "https://[2001:db8::1]/",
+            "https://[2001:db8::1]:443/",
+        ] {
+            assert!(
+                ports.ensure_target_allowed(url).is_ok(),
+                "must allow {url:?}, which is on 443"
+            );
+        }
+    }
+
+    /// A target we cannot parse is a target whose port we cannot verify, so it
+    /// is refused rather than admitted. This is the fail-closed half.
+    #[test]
+    fn an_unparseable_target_is_refused_not_admitted() {
+        let ports = EgressPorts::Https443Only;
+        for url in [
+            "",
+            "not a url",
+            "://missing-scheme",
+            "/relative/path",
+            "https://",
+        ] {
+            assert!(
+                ports.ensure_target_allowed(url).is_err(),
+                "must refuse the unverifiable target {url:?}"
+            );
+        }
+    }
+
+    /// Userinfo must not be able to smuggle a loopback-looking string in front
+    /// of a real host and win the loopback exemption.
+    #[test]
+    fn userinfo_cannot_forge_the_loopback_exemption() {
+        let ports = EgressPorts::Https443Only;
+        assert!(ports
+            .ensure_target_allowed("http://127.0.0.1@evil.example:8080/")
+            .is_err());
+        assert!(ports
+            .ensure_target_allowed("http://localhost@evil.example:8080/")
+            .is_err());
+    }
+
+    #[test]
+    fn restricting_to_443_requires_doh_not_the_system_resolver() {
+        // The system resolver uses UDP/53. Accepting this config would produce a
+        // decoy whose very first lookup is dropped.
+        let network = PersonaNetwork::new(Egress::Direct, DnsStrategy::SystemDefault)
+            .with_ports(EgressPorts::Https443Only);
+        let Err(err) = validate_network(&network) else {
+            panic!("system DNS under a 443 restriction must be refused");
+        };
+        assert!(err.to_string().contains("port 53"), "{err}");
+    }
+
+    #[test]
+    fn restricting_to_443_refuses_dns_over_tls() {
+        // DoT is port 853.
+        let network = PersonaNetwork::new(Egress::Direct, DnsStrategy::dot_default())
+            .with_ports(EgressPorts::Https443Only);
+        let Err(err) = validate_network(&network) else {
+            panic!("DoT under a 443 restriction must be refused");
+        };
+        assert!(err.to_string().contains("853"), "{err}");
+    }
+
+    #[test]
+    fn restricting_to_443_accepts_doh() {
+        let network = PersonaNetwork::new(Egress::Direct, DnsStrategy::doh_default())
+            .with_ports(EgressPorts::Https443Only);
+        assert!(validate_network(&network).is_ok());
+    }
+
+    #[test]
+    fn restricting_to_443_refuses_a_proxy_on_another_port() {
+        // Every decoy connection goes to the proxy, so the proxy's port is the
+        // one the firewall sees. Tor's 9050 is the obvious case.
+        let network = PersonaNetwork::new(Egress::tor(), DnsStrategy::doh_default())
+            .with_ports(EgressPorts::Https443Only);
+        let Err(err) = validate_network(&network) else {
+            panic!("a 9050 proxy under a 443 restriction must be refused");
+        };
+        assert!(err.to_string().contains("9050"), "{err}");
+    }
+
+    #[test]
+    fn restricting_to_443_accepts_a_proxy_on_443() {
+        let network = PersonaNetwork::new(
+            Egress::http_proxy("proxy.example.com", 443),
+            DnsStrategy::doh_default(),
+        )
+        .with_ports(EgressPorts::Https443Only);
+        assert!(validate_network(&network).is_ok());
+    }
+
+    #[test]
+    fn an_unrestricted_config_is_not_second_guessed() {
+        // The coherence rules exist only to make the restriction honest; they
+        // must not start rejecting configs that were always fine.
+        let network = PersonaNetwork::new(Egress::tor(), DnsStrategy::SystemDefault);
+        assert!(validate_network(&network).is_ok());
+    }
+
+    #[test]
+    fn the_port_policy_is_omitted_from_serialized_config_when_unrestricted() {
+        // Additive-field rule: a config written before #40 existed must load
+        // unchanged, and a default config must not start emitting a new key.
+        let json = serde_json::to_string(&PersonaNetwork::default())
+            .unwrap_or_else(|e| panic!("PersonaNetwork must serialize: {e}"));
+        assert!(
+            !json.contains("ports"),
+            "unrestricted must not be serialized, got {json}"
+        );
+        let restored: PersonaNetwork = serde_json::from_str(&json)
+            .unwrap_or_else(|e| panic!("PersonaNetwork must round-trip: {e}"));
+        assert_eq!(restored.ports, EgressPorts::Unrestricted);
+    }
+
+    #[test]
+    fn a_restricted_port_policy_round_trips_through_serde() {
+        let network = PersonaNetwork::new(Egress::Direct, DnsStrategy::doh_default())
+            .with_ports(EgressPorts::Https443Only);
+        let json = serde_json::to_string(&network)
+            .unwrap_or_else(|e| panic!("PersonaNetwork must serialize: {e}"));
+        let restored: PersonaNetwork = serde_json::from_str(&json)
+            .unwrap_or_else(|e| panic!("PersonaNetwork must round-trip: {e}"));
+        assert_eq!(restored, network);
     }
 
     #[test]

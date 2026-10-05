@@ -48,6 +48,18 @@ pub struct App {
     /// Non-fatal error banner shown above the body. Distinct from
     /// [`AppState::Error`], which is terminal. Dismissed by the user.
     pub error_banner: Option<String>,
+    /// Monotonic token identifying the CURRENT update check.
+    ///
+    /// An update check is a 10s-timeout network task, and the Settings screen it
+    /// belongs to can be left and re-entered while it is still in flight.
+    /// Without a token, that late result lands in whatever Settings state exists
+    /// now: it can overwrite a newer, successful check with a stale failure, and
+    /// because re-entering Settings resets the probe to Idle it also re-enables
+    /// the button, letting a second request go out alongside the first. Every
+    /// press bumps this, every result carries the value it was issued under, and
+    /// a result whose token is stale is dropped. See the `update` module's
+    /// `CheckForUpdate` / `UpdateChecked` reducers.
+    pub update_generation: u64,
     /// The resident tray icon, kept alive for the life of the process. `None`
     /// when the tray failed to initialize (a degraded but still usable window).
     /// Held purely as a liveness guard, so it is intentionally never read back:
@@ -74,9 +86,19 @@ pub enum AppState {
     Devices {
         /// The loaded sync snapshot, or `None` while the first load is pending.
         snapshot: Option<DevicesSnapshot>,
-        /// `true` while a Devices reload, mode change, or unpair is in flight,
-        /// so the view can show progress and coalesce redundant work.
+        /// `true` while a Devices reload, mode change, unpair, or pair-back is in
+        /// flight, so the view can show progress and coalesce redundant work.
         busy: bool,
+        /// The pairing code pasted into "Pair a device back" (issue #42
+        /// symmetric pairing). Transient UI state, cleared on a successful
+        /// pair-back.
+        pair_back_input: String,
+        /// The last pair-back status line, shown under the input.
+        pair_back_note: Option<String>,
+        /// The last clipboard-copy confirmation, shown next to the copy
+        /// controls (issue #38). Transient: it is replaced by the next copy and
+        /// cleared when the view reloads.
+        copy_note: Option<String>,
     },
     /// The C4 #20 A1 efficacy dashboard: per-platform KL-divergence drift
     /// timelines and a per-category heatmap. Reached from [`AppState::Running`].
@@ -172,6 +194,8 @@ pub enum AppState {
         port_text: String,
         /// `true` while a save is in flight.
         busy: bool,
+        /// The state of the user-initiated update check (see [`UpdateProbe`]).
+        update: UpdateProbe,
     },
     /// The in-app Help / FAQ screen: static, scrollable reference content. Holds
     /// no payload (it makes no core call) and returns to Running.
@@ -180,6 +204,34 @@ pub enum AppState {
     /// quit from the tray. A store that fails to open lands here (we render an
     /// error rather than panicking, per the task spec).
     Error(String),
+}
+
+/// The state of the update check on the Settings screen.
+///
+/// Starts at [`Idle`](Self::Idle) every time Settings is opened and only leaves
+/// it when the user presses the button: the app never checks on its own, so
+/// there is deliberately no state that represents "checked automatically". See
+/// `fauxx_core::update` for the disclosure rules.
+#[derive(Clone, Debug, Default)]
+pub enum UpdateProbe {
+    /// Nothing has been checked. The resting state.
+    #[default]
+    Idle,
+    /// A check is in flight.
+    Checking,
+    /// A check completed.
+    Done {
+        /// The plain-language result line.
+        summary: String,
+        /// The release page, when the check produced one.
+        url: Option<String>,
+        /// Whether a newer release exists, so the view can lead with it.
+        available: bool,
+        /// A transient confirmation (currently only "link copied").
+        note: Option<String>,
+    },
+    /// A check failed. Carries the reason, already phrased for a person.
+    Failed(String),
 }
 
 /// The tabs of the C3 privacy hub (#16/#17/#18/#19). `Dsar` is the default.
@@ -264,6 +316,7 @@ impl App {
             resolved_theme,
             state: AppState::Loading,
             error_banner: None,
+            update_generation: 0,
             tray,
         }
     }

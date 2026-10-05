@@ -27,13 +27,18 @@ use iced::{Alignment, Element, Length};
 
 use crate::message::Message;
 use crate::prefs::{DesktopSettings, ThemeChoice, MAX_REFRESH_SECS, MIN_REFRESH_SECS};
+use crate::state::UpdateProbe;
 
 pub fn view<'a>(
     draft: &'a DesktopSettings,
     port_text: &'a str,
     busy: bool,
+    update: &'a UpdateProbe,
 ) -> Element<'a, Message> {
     let body = column![
+        // First, so the control is found rather than hunted for: it is the one
+        // thing on this screen a user comes looking for on purpose.
+        updates_section(update),
         appearance_section(draft),
         behavior_section(draft),
         device_section(draft, port_text),
@@ -71,6 +76,86 @@ fn section<'a>(title: &'a str, content: Element<'a, Message>) -> Element<'a, Mes
         .width(Length::Fill)
         .style(crate::style::panel)
         .into()
+}
+
+/// The user-initiated update check.
+///
+/// The wording here is load-bearing, not decoration. Fauxx tells users it does
+/// not phone home, and this is the one control that can make a network request
+/// on their behalf, so the screen says up front that pressing the button is the
+/// only thing that contacts anything, and exactly what that discloses. A user
+/// who never presses it is never contacted.
+fn updates_section(update: &UpdateProbe) -> Element<'_, Message> {
+    let checking = matches!(update, UpdateProbe::Checking);
+
+    let button_label = if checking {
+        "Checking..."
+    } else {
+        "Check for updates"
+    };
+    // Disabled while in flight, so a second press cannot fire a second request.
+    let press = (!checking).then_some(Message::CheckForUpdate);
+
+    let mut col = column![
+        row![
+            text(format!("You have version {}", fauxx_core::VERSION))
+                .size(13)
+                .width(Length::Fill),
+            button(text(button_label).size(13))
+                .on_press_maybe(press)
+                .padding([8, 14]),
+        ]
+        .spacing(12)
+        .align_y(Alignment::Center),
+        text(
+            "Fauxx never checks for updates on its own. Pressing this button makes one \
+             request to GitHub, which sees your IP address and the app version, and nothing else."
+        )
+        .size(11),
+    ]
+    .spacing(8);
+
+    match update {
+        UpdateProbe::Idle | UpdateProbe::Checking => {}
+        UpdateProbe::Failed(reason) => {
+            col = col.push(text(reason.clone()).size(12));
+        }
+        UpdateProbe::Done {
+            summary,
+            url,
+            available,
+            note,
+        } => {
+            col = col.push(text(summary.clone()).size(13));
+            if let Some(url) = url {
+                // Only push the download route when there is actually something
+                // to download; otherwise the link is noise.
+                if *available {
+                    col = col.push(text(url.clone()).size(11));
+                    col = col.push(
+                        row![button(text("Copy download link").size(12))
+                            .on_press(Message::CopyReleaseLink(url.clone()))
+                            .padding([4, 10]),]
+                        .spacing(8),
+                    );
+                    col = col.push(
+                        text(
+                            "Fauxx does not install updates itself. Open the link in your \
+                             browser to download. On Linux the AppImage carries update \
+                             information, so AppImageUpdate or AppImageLauncher can update \
+                             it in place.",
+                        )
+                        .size(11),
+                    );
+                }
+            }
+            if let Some(note) = note {
+                col = col.push(text(note.clone()).size(11));
+            }
+        }
+    }
+
+    section("Updates", col.into())
 }
 
 fn appearance_section(draft: &DesktopSettings) -> Element<'_, Message> {

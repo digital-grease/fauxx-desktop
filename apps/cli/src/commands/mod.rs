@@ -25,6 +25,7 @@ pub mod alias;
 pub mod anchor;
 pub mod broker;
 pub mod campaign;
+pub mod check_update;
 pub mod dns;
 pub mod drift;
 pub mod dsar;

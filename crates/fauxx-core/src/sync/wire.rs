@@ -310,6 +310,22 @@ pub struct PairingPayload {
     pub host: Option<String>,
     /// TCP port hint for the sync transport.
     pub port: u16,
+    /// Literal `IP:port` endpoints this device can be dialed on, best candidate
+    /// first (#38).
+    ///
+    /// [`host`](Self::host) alone is not enough: resolving a bare `.local.`
+    /// name needs an mDNS resolver on the *scanning* device, and a phone often
+    /// does not have one for a plain host name, so it ends up holding a peer it
+    /// cannot reach. These are the same addresses rendered by
+    /// [`local_socket_strings`](crate::sync::local_socket_strings), capped at
+    /// [`PAIRING_ADDR_LIMIT`](crate::sync::PAIRING_ADDR_LIMIT) to keep the QR
+    /// scannable.
+    ///
+    /// Additive and omitted entirely when empty, so a peer built before this
+    /// field existed decodes the payload unchanged, and a payload from such a
+    /// peer still decodes here.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub addrs: Vec<String>,
 }
 
 impl PairingPayload {
@@ -327,7 +343,20 @@ impl PairingPayload {
             pk: URL_SAFE_NO_PAD.encode(public_key),
             host,
             port,
+            addrs: Vec::new(),
         }
+    }
+
+    /// Attach the literal endpoints this device can be dialed on.
+    ///
+    /// Kept separate from [`new`](Self::new) so the address hint stays additive:
+    /// every existing caller keeps building the same payload it always did, and
+    /// a payload with no addresses encodes byte-for-byte as it did before the
+    /// field existed. See [`addrs`](Self::addrs).
+    #[must_use]
+    pub fn with_addrs(mut self, addrs: Vec<String>) -> Self {
+        self.addrs = addrs;
+        self
     }
 
     /// Encode to the compact base64url string carried in the QR. The outer

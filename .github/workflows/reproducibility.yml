@@ -4,13 +4,39 @@
 # normal CI on every push; run it before cutting a release (or on demand) to
 # confirm the determinism levers still hold.
 #
-# It checks out the repo TWICE into different paths and builds the headless `fauxx-cli`
-# binary in each with the same levers the release uses: a pinned toolchain
-# (1.96.0), --locked deps, SOURCE_DATE_EPOCH, CARGO_INCREMENTAL=0, and a
-# --remap-path-prefix that maps each checkout's distinct path to the same /build
-# (so the differing source paths do not leak into the binary). Identical sha256
-# over the two binaries is the proof; a mismatch fails the job and points at the
-# nondeterminism to fix.
+# It checks out the repo TWICE (two independent source trees) and builds the
+# headless `fauxx-cli` binary from each with the same levers the release uses: a
+# pinned toolchain (1.96.0), --locked deps, SOURCE_DATE_EPOCH, CARGO_INCREMENTAL=0,
+# and --remap-path-prefix. Identical sha256 over the two binaries is the proof; a
+# mismatch fails the job and points at the nondeterminism to fix.
+#
+# WHAT THIS PROVES, AND THE TWO LEVERS THAT MAKE IT TRUE
+#
+# The two checkouts live at DIFFERENT paths and are each built in place, so a
+# match here means the binary does not depend on where the source sits. Getting
+# there took two levers beyond the obvious ones, both of which were found by
+# measuring a shipped artifact rather than by reasoning:
+#
+#   1. The vendored OpenSSL prefix. rusqlite pulls
+#      `bundled-sqlcipher-vendored-openssl`, so openssl-sys compiles OpenSSL from
+#      source, and OpenSSL's build bakes its absolute install prefix into the
+#      compiled C (ENGINESDIR, MODULESDIR). `--remap-path-prefix` cannot touch
+#      it: that is a RUSTC flag and these are `-D` macro values handed to the C
+#      compiler. The prefix derives from OUT_DIR, hence from CARGO_TARGET_DIR, so
+#      holding CARGO_TARGET_DIR fixed pins it. (Measured before the fix: 4
+#      differing strings, ~104 KB of knock-on difference, first divergence at
+#      byte 813, including the content-derived GNU build-id.)
+#
+#   2. CARGO_HOME. Dependency crates compile from the registry, so their panic
+#      locations bake the builder's absolute `~/.cargo/registry/src/...` path
+#      into the binary. Those sit OUTSIDE the workspace, so the workspace remap
+#      never reached them. Measured at 1261 such strings in a shipped v0.3.0
+#      AppImage; a second remap takes it to 0.
+#
+# With both applied, two builds from different checkout paths are byte-identical
+# (verified locally before this lane was written). Note the target dir is wiped
+# between builds: sharing it would let the second reuse the first's artifacts and
+# make the comparison vacuous.
 #
 # Scope note: this verifies the CLI binary on one OS/runner (the achievable,
 # automatable guarantee). A fuller cross-machine independent rebuild is a manual
@@ -53,20 +79,33 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libdbus-1-dev libxkbcommon-dev libwayland-dev
-      - name: Build A (release, locked, path-remapped)
-        working-directory: build-a
-        env:
-          RUSTFLAGS: "--remap-path-prefix=${{ github.workspace }}/build-a=/build"
-        run: cargo build --release --locked --bin fauxx-cli
-      - name: Build B (release, locked, path-remapped)
-        working-directory: build-b
-        env:
-          RUSTFLAGS: "--remap-path-prefix=${{ github.workspace }}/build-b=/build"
-        run: cargo build --release --locked --bin fauxx-cli
+      # Each checkout is built IN PLACE, at its own distinct path, through one
+      # fixed CARGO_TARGET_DIR that is wiped between builds so the second cannot
+      # reuse the first's artifacts. Building in place is the point: it is what
+      # makes this a test of path-INDEPENDENCE rather than merely of determinism
+      # at one path.
+      - name: Build each checkout in place, through a fixed target dir
+        run: |
+          set -euo pipefail
+          target="${RUNNER_TEMP}/fauxx-target"
+          cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+          mkdir -p "${RUNNER_TEMP}/out"
+          for src in build-a build-b; do
+            echo "::group::build $src"
+            rm -rf "$target"
+            ( cd "$src" \
+              && CARGO_TARGET_DIR="$target" \
+                 RUSTFLAGS="--remap-path-prefix=$PWD=/build --remap-path-prefix=$cargo_home=/cargo" \
+                 cargo build --release --locked --bin fauxx-cli )
+            cp "$target/release/fauxx-cli" "${RUNNER_TEMP}/out/fauxx-cli-$src"
+            echo "::endgroup::"
+          done
+          rm -rf "$target"
       - name: Compare byte-for-byte
         run: |
-          a="build-a/target/release/fauxx-cli"
-          b="build-b/target/release/fauxx-cli"
+          set -euo pipefail
+          a="${RUNNER_TEMP}/out/fauxx-cli-build-a"
+          b="${RUNNER_TEMP}/out/fauxx-cli-build-b"
           sha_a="$(sha256sum "$a" | cut -d' ' -f1)"
           sha_b="$(sha256sum "$b" | cut -d' ' -f1)"
           echo "build A sha256 = $sha_a"

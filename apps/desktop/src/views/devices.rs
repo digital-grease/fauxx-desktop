@@ -29,14 +29,20 @@
 //! peers, mode).
 
 use fauxx_core::{CoordinationMode, DiscoveredPeer, PairedPeer};
-use iced::widget::{button, column, container, row, scrollable, svg, text};
+use iced::widget::{button, column, container, row, scrollable, svg, text, text_input};
 use iced::{Element, Length};
 
 use crate::message::{DevicesSnapshot, Message};
 
-pub fn view(snapshot: Option<&DevicesSnapshot>, busy: bool) -> Element<'_, Message> {
-    let body: Element<'_, Message> = match snapshot {
-        Some(snapshot) => loaded(snapshot, busy),
+pub fn view<'a>(
+    snapshot: Option<&'a DevicesSnapshot>,
+    busy: bool,
+    pair_back_input: &'a str,
+    pair_back_note: Option<&'a str>,
+    copy_note: Option<&'a str>,
+) -> Element<'a, Message> {
+    let body: Element<'a, Message> = match snapshot {
+        Some(snapshot) => loaded(snapshot, busy, pair_back_input, pair_back_note, copy_note),
         None => text("Loading device and pairing details...")
             .size(14)
             .into(),
@@ -69,9 +75,23 @@ fn toolbar(busy: bool) -> Element<'static, Message> {
     .into()
 }
 
-/// The two-column body shown once a snapshot is loaded: pairing on the left,
-/// peers + mode on the right.
-fn loaded<'a>(snapshot: &'a DevicesSnapshot, busy: bool) -> Element<'a, Message> {
+/// The two-column body shown once a snapshot is loaded: pairing (QR + pair-back)
+/// on the left, peers + mode on the right.
+fn loaded<'a>(
+    snapshot: &'a DevicesSnapshot,
+    busy: bool,
+    pair_back_input: &'a str,
+    pair_back_note: Option<&'a str>,
+    copy_note: Option<&'a str>,
+) -> Element<'a, Message> {
+    let left = column![
+        pairing_panel(snapshot, copy_note),
+        reach_panel(&snapshot.local_endpoints),
+        pair_back_panel(pair_back_input, pair_back_note, busy),
+    ]
+    .spacing(12)
+    .width(Length::FillPortion(2));
+
     let right = column![
         mode_panel(snapshot.mode, busy),
         paired_panel(&snapshot.paired, busy),
@@ -81,7 +101,7 @@ fn loaded<'a>(snapshot: &'a DevicesSnapshot, busy: bool) -> Element<'a, Message>
     .width(Length::FillPortion(3));
 
     row![
-        pairing_panel(snapshot),
+        scrollable(left).height(Length::Fill),
         scrollable(right).height(Length::Fill)
     ]
     .spacing(16)
@@ -90,7 +110,10 @@ fn loaded<'a>(snapshot: &'a DevicesSnapshot, busy: bool) -> Element<'a, Message>
 }
 
 /// This device's pairing QR + fingerprint.
-fn pairing_panel<'a>(snapshot: &'a DevicesSnapshot) -> Element<'a, Message> {
+fn pairing_panel<'a>(
+    snapshot: &'a DevicesSnapshot,
+    copy_note: Option<&'a str>,
+) -> Element<'a, Message> {
     let mut col = column![text("This device").size(16)].spacing(8);
 
     match &snapshot.pairing_qr {
@@ -106,7 +129,26 @@ fn pairing_panel<'a>(snapshot: &'a DevicesSnapshot) -> Element<'a, Message> {
                 .width(Length::Fill)
                 .align_x(iced::alignment::Horizontal::Center),
             );
-            col = col.push(text("Scan this with the Fauxx phone app to pair.").size(11));
+            col = col.push(
+                text("Step 1 of 2: scan this with the Fauxx phone app so it pairs this device.")
+                    .size(11),
+            );
+            // The camera cannot always read the code (issue #38: users resorted
+            // to screenshotting it and decoding it in a separate app, because
+            // the text was only reachable from the CLI). The same payload, one
+            // click away, is the escape hatch.
+            col = col.push(
+                button(text("Copy pairing code").size(12))
+                    .on_press(Message::DeviceCopyPairingCode)
+                    .padding([4, 10]),
+            );
+            col = col.push(
+                text(
+                    "If the phone will not scan, copy the code and paste it into the \
+                      phone's Sync screen instead.",
+                )
+                .size(11),
+            );
         }
         None => {
             col = col.push(
@@ -119,10 +161,105 @@ fn pairing_panel<'a>(snapshot: &'a DevicesSnapshot) -> Element<'a, Message> {
         col = col.push(labeled("Fingerprint", fingerprint.clone()));
     }
 
+    if let Some(note) = copy_note {
+        col = col.push(text(note).size(11));
+    }
+
     container(col)
         .padding(12)
-        .width(Length::FillPortion(2))
-        .height(Length::Fill)
+        .width(Length::Fill)
+        .style(crate::style::panel)
+        .into()
+}
+
+/// This device's dialable addresses (issue #38).
+///
+/// Discovery advertises an mDNS host name, and a phone frequently cannot
+/// resolve one: it then reports no route to a desktop sitting on the same
+/// Wi-Fi. The phone has a manual connect-by-address field for exactly this, but
+/// until now the desktop never told the user what address to put in it. Each
+/// entry copies to the clipboard; the first is the best guess.
+fn reach_panel(endpoints: &[String]) -> Element<'_, Message> {
+    let mut col = column![text("Reach this device").size(16)].spacing(8);
+
+    if endpoints.is_empty() {
+        col = col.push(
+            text("No network addresses found. This device does not appear to be on a network.")
+                .size(11),
+        );
+    } else {
+        col = col.push(
+            text(
+                "If the phone cannot find this device, enter one of these addresses on the \
+                 phone manually. Try the first one first.",
+            )
+            .size(11),
+        );
+        for endpoint in endpoints {
+            col = col.push(
+                row![
+                    text(endpoint.clone()).size(12).width(Length::Fill),
+                    button(text("Copy").size(11))
+                        .on_press(Message::DeviceCopyEndpoint(endpoint.clone()))
+                        .padding([2, 8]),
+                ]
+                .spacing(8)
+                .align_y(iced::alignment::Vertical::Center),
+            );
+        }
+    }
+
+    container(col)
+        .padding(12)
+        .width(Length::Fill)
+        .style(crate::style::panel)
+        .into()
+}
+
+/// The symmetric-pairing control (issue #42): paste the OTHER device's pairing
+/// code so THIS device pairs it back. LAN-sync pairing is per-device, so until
+/// this is done an inbound push from the phone is rejected because this device
+/// cannot authenticate a peer it has not paired. Mirrors the two-way guidance
+/// shipped on the Android side (fauxx#213).
+fn pair_back_panel<'a>(
+    pair_back_input: &'a str,
+    pair_back_note: Option<&'a str>,
+    busy: bool,
+) -> Element<'a, Message> {
+    let mut col = column![
+        text("Pair a device back").size(16),
+        text(
+            "Step 2 of 2: pairing works both ways. After the other device scans the QR, \
+             open Fauxx on it to show ITS pairing code, then paste that code here so this \
+             device pairs it back. Both directions are required before devices can sync."
+        )
+        .size(11),
+    ]
+    .spacing(8);
+
+    let input = text_input("Paste the other device's pairing code", pair_back_input)
+        .on_input(Message::DevicePairBackChanged)
+        .padding(8)
+        .width(Length::Fill);
+    col = col.push(input);
+
+    let can_submit = !busy && !pair_back_input.trim().is_empty();
+    let pair_button = button(text(if busy {
+        "Pairing..."
+    } else {
+        "Pair this device"
+    }))
+    .on_press_maybe(can_submit.then_some(Message::DevicePairBack))
+    .padding(8);
+    col = col.push(pair_button);
+
+    if let Some(note) = pair_back_note {
+        col = col.push(text(note.to_owned()).size(11));
+    }
+
+    container(col)
+        .padding(12)
+        .width(Length::Fill)
         .style(crate::style::panel)
         .into()
 }

@@ -79,6 +79,20 @@ ignore = [
     # the rfd/ashpd chain) moving to 0.41. REMOVE both once that lands.
     "RUSTSEC-2026-0194",
     "RUSTSEC-2026-0195",
+    # `rustybuzz` (0.20.1): UNMAINTAINED (not a vulnerability; the maintainer has
+    # stated the crate will receive no further fixes or updates). It is the text
+    # shaper on the SVG rendering chain, pulled transitively and only by the GUI:
+    # `iced 0.14` -> `iced_renderer` -> `iced_tiny_skia`/`iced_wgpu` -> `resvg
+    # 0.45.1` -> `usvg 0.45.1` -> `rustybuzz`. That chain is exactly what draws the
+    # pairing QR (`crates/fauxx-core/src/sync/qr.rs` renders the payload to SVG and
+    # `apps/desktop/src/views/devices.rs` hands it to iced's `svg` widget via
+    # `svg::Handle::from_memory`), so it cannot be dropped without giving up the QR
+    # rendering. The headless core/CLI do not pull it at all. There is no upgrade
+    # to take: usvg 0.45.1 pins rustybuzz `^0.20`, so this waits on resvg/usvg
+    # moving to a maintained shaper (`harfrust`/`swash`), then on iced picking that
+    # release up. REMOVE this entry once iced ships a resvg that no longer depends
+    # on rustybuzz.
+    "RUSTSEC-2026-0206",
     # NOTE: the tokio broadcast unsoundness (RUSTSEC-2025-0023) is fixed by the
     # patched tokio pin (root Cargo.toml), not ignored.
 ]
@@ -111,6 +125,14 @@ allow = [
     # Boost Software License: permissive, OSI-approved, AGPL-compatible. Pulled
     # by `clipboard-win` / `error-code` via iced's clipboard (iced_winit).
     "BSL-1.0",
+    # Community Data License Agreement, Permissive 2.0. A DATA license, which is
+    # what it is being used for here: `webpki-root-certs` ships the Mozilla CA
+    # root bundle, and a list of certificates is data, not code. It is
+    # permissive with no copyleft and no share-alike, so it does not constrain
+    # the AGPL binary that embeds it. Pulled by `rustls-platform-verifier` via
+    # the update check's rustls stack (`crate::update`); the same bundle every
+    # rustls user ships.
+    "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.93
 

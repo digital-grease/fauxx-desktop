@@ -60,6 +60,7 @@ pub mod studio;
 pub mod subsystems;
 pub mod sync;
 pub mod ui;
+pub mod update;
 
 pub use aliases::{AliasKind, AliasProvider, AliasStatus, EmailAlias, PlusAddressProvider};
 pub use anchors::{
@@ -112,9 +113,9 @@ pub use mqtt::{
     SensorPayload, StatusPayload, DEFAULT_BASE_TOPIC, DEFAULT_DISCOVERY_PREFIX, DEFAULT_MQTT_PORT,
 };
 pub use network::{
-    validate_dns, validate_egress, DnsStrategy, Egress, EgressExit, PersonaNetwork, ProxyAuth,
-    ReachabilityCheck, StaticReachability, TcpReachability, DEFAULT_DOH_RESOLVER,
-    DEFAULT_DOT_RESOLVER, DEFAULT_TOR_SOCKS_ADDR, REACHABILITY_TIMEOUT,
+    validate_dns, validate_egress, validate_network, DnsStrategy, Egress, EgressExit, EgressPorts,
+    PersonaNetwork, ProxyAuth, ReachabilityCheck, StaticReachability, TcpReachability,
+    DEFAULT_DOH_RESOLVER, DEFAULT_DOT_RESOLVER, DEFAULT_TOR_SOCKS_ADDR, REACHABILITY_TIMEOUT,
 };
 pub use orchestration::{
     CoordinationMode, DeviceAssignment, DeviceIntent, HouseholdOrchestrator, IntensityLevel,
@@ -137,6 +138,7 @@ pub use sync::{
     SYNC_PROTOCOL_VERSION,
 };
 pub use ui::{NullUi, UiSink};
+pub use update::{check_for_update, UpdateCheck, UpdateStatus, RELEASES_URL};
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -919,12 +921,62 @@ impl Core {
         Ok(self.sync_engine()?.pairing_payload())
     }
 
+    /// The `IP:port` endpoints another device on this LAN can dial to reach
+    /// this one, best candidate first.
+    ///
+    /// Discovery advertises an mDNS host name, which a phone frequently cannot
+    /// resolve on its own; when that happens the phone reports no route to a
+    /// device that is sitting right there. Showing the user a literal address
+    /// to type into the phone's connect-by-address field turns that dead end
+    /// into a working pairing (#38).
+    pub async fn local_endpoints(&self) -> Result<Vec<String>> {
+        Ok(self.sync_engine()?.local_endpoints())
+    }
+
     /// Complete pairing with a peer from a scanned pairing-payload string (the
     /// base64url QR contents). Records the peer's public key so the sealed
     /// channel between the two devices opens; persists the paired record.
     pub async fn complete_pairing(&self, scanned_payload: &str) -> Result<PairedPeer> {
         let payload = PairingPayload::decode(scanned_payload)?;
-        self.sync_engine()?.complete_pairing(&payload).await
+        let peer = self.sync_engine()?.complete_pairing(&payload).await?;
+
+        // #38: seed the routing table from the addresses the payload carried, so
+        // a peer paired by QR is reachable IMMEDIATELY, without waiting for mDNS
+        // to resolve it. That is the whole point of the field: the failure this
+        // fixes is precisely the one where mDNS never resolves.
+        //
+        // The addresses are attacker-influencable (they come from a scanned or
+        // pasted code), so they go through `parse_pairing_addrs`, which keeps
+        // only LAN-plausible endpoints and caps the count. See that function for
+        // why an unfiltered list would be a port-scan primitive.
+        self.seed_routes_from_addrs(&peer.public_key, &payload.addrs)
+            .await;
+        Ok(peer)
+    }
+
+    /// Insert the first usable LAN address for a peer into the routing table.
+    ///
+    /// Best-effort and deliberately silent: LAN sync may be off (no table), the
+    /// key may not decode, or every address may be filtered out. None of those
+    /// is a reason to fail a pairing that otherwise succeeded, because the
+    /// mDNS path and the manual `add_sync_route` path both still work.
+    async fn seed_routes_from_addrs(&self, peer_public_key: &str, addrs: &[String]) {
+        let Some(routes) = self.inner.sync_routes.as_ref() else {
+            return;
+        };
+        let Ok(pk) = sync::decode_public_key(peer_public_key) else {
+            return;
+        };
+        let usable = sync::parse_pairing_addrs(addrs);
+        let Some(addr) = usable.first().copied() else {
+            return;
+        };
+        routes.lock().await.insert(pk, addr);
+        tracing::info!(
+            target: "fauxx_core::sync",
+            peer = %sync::fingerprint(&pk),
+            "seeded a sync route from the pairing payload's address hint"
+        );
     }
 
     /// List paired (trusted) peers.
@@ -1045,6 +1097,29 @@ impl Core {
                 set += 1;
             }
         }
+        drop(table);
+
+        // #38: mDNS is exactly what fails in the case this feature exists for, so
+        // fall back to the addresses each paired peer advertised when it was
+        // paired. Discovery wins where it works (it tracks a DHCP lease change);
+        // this only fills the gaps it leaves, and it survives a restart because
+        // the addresses are persisted on the peer record.
+        for peer in self.paired_peers().await.unwrap_or_default() {
+            if peer.addrs.is_empty() {
+                continue;
+            }
+            let Ok(pk) = sync::decode_public_key(&peer.public_key) else {
+                continue;
+            };
+            let mut table = routes.lock().await;
+            if table.contains_key(&pk) {
+                continue;
+            }
+            if let Some(addr) = sync::parse_pairing_addrs(&peer.addrs).first().copied() {
+                table.insert(pk, addr);
+                set += 1;
+            }
+        }
         Ok(set)
     }
 
@@ -1056,11 +1131,18 @@ impl Core {
     /// Once attributed, the frame is routed to its dedicated verified path by
     /// kind. Returns `(sender base64url key, applied kind name)`.
     pub async fn ingest_inbound_frame(&self, frame: &[u8]) -> Result<(String, &'static str)> {
+        // Issue #42: LAN-sync pairing is per-device. A push from a peer this
+        // device has not paired back cannot be authenticated (the sealed frame
+        // carries no cleartext sender, so attribution is by trying each paired
+        // key). Surface a clear, actionable message instead of a bare auth
+        // failure, mirroring the two-way pairing guidance shipped on the Android
+        // side (fauxx#213).
+        const PAIR_BOTH_WAYS_HINT: &str = "LAN-sync pairing must be completed on BOTH devices: pair the other device from this device too (open Devices and use \"Pair a device back\", or run `fauxx-cli pair add <code>`).";
         let peers = self.paired_peers().await?;
         if peers.is_empty() {
-            return Err(CoreError::Sync(
-                "inbound sync frame but no paired peers; nothing can authenticate it".to_string(),
-            ));
+            return Err(CoreError::Sync(format!(
+                "received a LAN sync push, but this device has not paired any device, so nothing can authenticate it. {PAIR_BOTH_WAYS_HINT}"
+            )));
         }
         for peer in peers {
             // Peek: does this frame open + authenticate as from `peer`?
@@ -1093,9 +1175,9 @@ impl Core {
             };
             return Ok((peer.public_key, kind));
         }
-        Err(CoreError::Sync(
-            "inbound frame did not authenticate against any paired peer".to_string(),
-        ))
+        Err(CoreError::Sync(format!(
+            "received a LAN sync push, but this device has not paired the sender back, so it cannot be authenticated. {PAIR_BOTH_WAYS_HINT} If you did not start a sync, you can safely ignore this."
+        )))
     }
 
     /// Run the inbound sync listener until `shutdown` is notified. Binds the sync
@@ -2904,7 +2986,13 @@ impl Core {
     /// keystore, never the DB and never a log. Errors if no store is attached or
     /// the egress is malformed.
     pub async fn set_persona_egress(&self, persona_id: &str, egress: Egress) -> Result<()> {
-        network::validate_egress(&egress)?;
+        // Validate the WHOLE resulting config, not just this field: if the
+        // persona is already restricted to TCP/443 (#40), an egress through a
+        // proxy on another port contradicts it. Checking only the new value
+        // would let the two be set in the order that skips the guard.
+        let dns = self.get_persona_dns(persona_id).await?;
+        let ports = self.get_persona_egress_ports(persona_id).await?;
+        network::validate_network(&PersonaNetwork::new(egress.clone(), dns).with_ports(ports))?;
         match &self.inner.store {
             Some(store) => {
                 store.lock().await.put_persona_egress(persona_id, &egress)?;
@@ -3039,7 +3127,13 @@ impl Core {
     /// decoy profile as the egress (see [`Core::launch_persona_decoy_browser`]).
     /// Errors if no store is attached or the strategy is malformed.
     pub async fn set_persona_dns(&self, persona_id: &str, dns: DnsStrategy) -> Result<()> {
-        network::validate_dns(&dns)?;
+        // Validate the WHOLE resulting config: a persona already restricted to
+        // TCP/443 (#40) cannot resolve over the system resolver or DoT, and
+        // checking only the new value would let the two be set in the order
+        // that skips the guard.
+        let egress = self.get_persona_egress(persona_id).await?;
+        let ports = self.get_persona_egress_ports(persona_id).await?;
+        network::validate_network(&PersonaNetwork::new(egress, dns.clone()).with_ports(ports))?;
         match &self.inner.store {
             Some(store) => {
                 store.lock().await.put_persona_dns(persona_id, &dns)?;
@@ -3097,7 +3191,62 @@ impl Core {
     pub async fn persona_network(&self, persona_id: &str) -> Result<PersonaNetwork> {
         let egress = self.get_persona_egress(persona_id).await?;
         let dns = self.get_persona_dns(persona_id).await?;
-        Ok(PersonaNetwork::new(egress, dns))
+        let ports = self.get_persona_egress_ports(persona_id).await?;
+        Ok(PersonaNetwork::new(egress, dns).with_ports(ports))
+    }
+
+    /// Restrict this persona's decoy traffic to TCP/443, or lift the
+    /// restriction (#40).
+    ///
+    /// Validates the WHOLE resulting network config, not just this field:
+    /// restricting to 443 while resolving over the system resolver (UDP/53),
+    /// DoT (TCP/853), or through a proxy on another port would produce a decoy
+    /// whose traffic the user's firewall drops. Those combinations fail closed
+    /// here with a message naming the fix, rather than being persisted and
+    /// silently failing at launch.
+    pub async fn set_persona_egress_ports(
+        &self,
+        persona_id: &str,
+        ports: EgressPorts,
+    ) -> Result<()> {
+        // Validate against the persona's CURRENT egress and DNS, since those
+        // are what this policy has to cohere with.
+        let egress = self.get_persona_egress(persona_id).await?;
+        let dns = self.get_persona_dns(persona_id).await?;
+        network::validate_network(&PersonaNetwork::new(egress, dns).with_ports(ports))?;
+
+        match &self.inner.store {
+            Some(store) => {
+                store
+                    .lock()
+                    .await
+                    .put_persona_egress_ports(persona_id, &ports)?;
+                tracing::info!(
+                    target: "fauxx_core::network",
+                    persona_id,
+                    restricted = ports.is_restricted(),
+                    "bound per-persona outbound port policy"
+                );
+                Ok(())
+            }
+            None => Err(CoreError::Unimplemented(
+                "set_persona_egress_ports requires an open store",
+            )),
+        }
+    }
+
+    /// The per-persona [`EgressPorts`] policy, defaulting to
+    /// [`EgressPorts::Unrestricted`] when none is bound (or no store is
+    /// attached).
+    pub async fn get_persona_egress_ports(&self, persona_id: &str) -> Result<EgressPorts> {
+        match &self.inner.store {
+            Some(store) => Ok(store
+                .lock()
+                .await
+                .get_persona_egress_ports(persona_id)?
+                .unwrap_or_default()),
+            None => Ok(EgressPorts::default()),
+        }
     }
 
     /// Launch an isolated decoy browser for `persona_id` with that persona's

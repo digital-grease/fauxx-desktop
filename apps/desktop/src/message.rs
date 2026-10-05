@@ -20,8 +20,9 @@
 
 use fauxx_core::{
     BrokerDiffTimeline, Campaign, Comparator, CoordinationMode, DeviceProfile, DiscoveredPeer,
-    DnsStrategy, Egress, EgressExit, Finding, InstalledPack, PairedPeer, PairingQr, PersonaField,
-    PersonaSettings, PlatformDrift, RotationSchedule, SimulatedWeek, Status, SyntheticPersona,
+    DnsStrategy, Egress, EgressExit, EgressPorts, Finding, InstalledPack, PairedPeer, PairingQr,
+    PersonaField, PersonaSettings, PlatformDrift, RotationSchedule, SimulatedWeek, Status,
+    SyntheticPersona, UpdateCheck,
 };
 
 use crate::prefs::ThemeChoice;
@@ -59,6 +60,29 @@ pub enum Message {
     /// An `unpair` call finished. `Err` carries a message for the banner; on
     /// success the Devices view is reloaded so the peer list updates.
     Unpaired(Result<(), String>),
+    /// User edited the "Pair a device back" payload field in the Devices view
+    /// (issue #42 symmetric pairing).
+    DevicePairBackChanged(String),
+    /// User submitted the pasted pairing code to pair the other device back from
+    /// the Devices view, so this device can authenticate inbound pushes from it
+    /// (issue #42 symmetric pairing).
+    DevicePairBack,
+    /// A Devices-view pair-back finished. `Ok` carries a short summary line; on
+    /// success the view reloads so the newly paired device appears.
+    DevicePairedBack(Result<String, String>),
+    /// Copy this device's pairing code (the exact QR contents) to the clipboard
+    /// (issue #38).
+    ///
+    /// Scanning the QR is the happy path, but users whose camera would not read
+    /// it were reduced to screenshotting the code and decoding it with a
+    /// third-party app, because the payload text was only reachable from the
+    /// CLI. This puts the same text one click away.
+    DeviceCopyPairingCode,
+    /// Copy one of this device's dialable `IP:port` endpoints to the clipboard,
+    /// for typing into the phone's connect-by-address field (issue #38).
+    DeviceCopyEndpoint(String),
+    /// A Devices-view copy finished; carries the confirmation line to show.
+    DeviceCopied(String),
     // --- C4 #20 A1 efficacy dashboard --------------------------------------
     /// User opened the efficacy "Dashboard" view (from the Running screen).
     OpenDashboard,
@@ -180,6 +204,29 @@ pub enum Message {
     NetworkSetEgress(Egress),
     /// User chose a DNS strategy for the selected persona.
     NetworkSetDns(DnsStrategy),
+    /// User picked an outbound port policy for the selected persona (#40).
+    NetworkSetPorts(EgressPorts),
+
+    // --- user-initiated update check ---------------------------------------
+    /// User pressed "Check for updates" on the Settings screen.
+    ///
+    /// This is the ONLY thing that starts an update check. There is no timer and
+    /// no startup check: the app does not contact any server unless a person
+    /// asks it to. See `fauxx_core::update`.
+    CheckForUpdate,
+    /// An update check finished. `Err` carries a message already phrased for a
+    /// person (offline, rate-limited, and so on).
+    ///
+    /// The `u64` is the generation token the check was issued under (see
+    /// `App::update_generation`). A result whose token no longer matches belongs
+    /// to a check the user has already navigated away from or superseded, and is
+    /// dropped rather than applied.
+    UpdateChecked(u64, Result<UpdateCheck, String>),
+    /// Copy the release-page link to the clipboard. The app does not open a
+    /// browser itself; the user decides where the link goes.
+    CopyReleaseLink(String),
+    /// The release link reached the clipboard.
+    ReleaseLinkCopied,
     /// An egress/DNS write finished. On success the panel reloads.
     NetworkSaved(Result<(), String>),
 
@@ -305,6 +352,14 @@ pub struct DevicesSnapshot {
     pub discovered: Vec<DiscoveredPeer>,
     /// The active household coordination mode.
     pub mode: CoordinationMode,
+    /// The `IP:port` endpoints a phone on this LAN can dial to reach this
+    /// device, best candidate first (#38).
+    ///
+    /// Shown so a user whose phone reports no route has something concrete to
+    /// type into its connect-by-address field, instead of being stuck behind an
+    /// mDNS name the phone cannot resolve. Empty when this device is not on a
+    /// network.
+    pub local_endpoints: Vec<String>,
 }
 
 /// A point-in-time view of the C4 #20 A1 efficacy dashboard, loaded off the
@@ -441,6 +496,8 @@ pub struct NetworkSnapshot {
     pub exit: Option<EgressExit>,
     /// The explicit DNS observer trade-off note for the current strategy.
     pub dns_note: String,
+    /// The selected persona's outbound port policy (defaults to unrestricted).
+    pub ports: EgressPorts,
 }
 
 /// The freeform (string-typed) persona fields the editor lets the user type

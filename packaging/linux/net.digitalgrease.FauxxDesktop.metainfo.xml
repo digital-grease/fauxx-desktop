@@ -67,6 +67,20 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.3.0" date="2026-08-26">
+      <description>
+        <p>Fixes a blank-text window on Linux hosts with no sans-serif font configured, by bundling the UI typeface.</p>
+        <p>Repairs LAN device pairing: pairing is now symmetric with a clear error when only one side has paired, and the desktop shows and shares the addresses a phone can dial when mDNS discovery fails.</p>
+        <p>Fixes the browser extension refusing to install in Firefox and its forks.</p>
+        <p>Adds an option to confine decoy traffic to TCP port 443 for strict egress firewalls.</p>
+        <p>Adds a Check for updates button in Settings. It runs only when pressed; nothing checks in the background.</p>
+      </description>
+    </release>
+    <release version="0.2.1" date="2026-07-10">
+      <description>
+        <p>Packaging fix for the Linux AppImage release upload.</p>
+      </description>
+    </release>
     <release version="0.2.0" date="2026-07-10">
       <description>
         <p>Adds a stable per-persona desktop device identity (user-agent and client hints) for the decoy browser.</p>

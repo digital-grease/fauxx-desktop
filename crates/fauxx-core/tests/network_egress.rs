@@ -33,7 +33,7 @@ use fauxx_core::browser::BrowserLaunchConfig;
 use fauxx_core::persona::{AgeRange, CategoryPool, Profession, Region, SyntheticPersona};
 use fauxx_core::store::{EncryptedStore, KeySource};
 use fauxx_core::{
-    Config, Core, CoreError, DnsStrategy, Egress, PersonaNetwork, ProxyAuth, Result,
+    Config, Core, CoreError, DnsStrategy, Egress, EgressPorts, PersonaNetwork, ProxyAuth, Result,
     StaticReachability,
 };
 
@@ -102,6 +102,114 @@ async fn egress_and_dns_persist_and_round_trip_per_persona() -> Result<()> {
     assert_eq!(
         core2.get_persona_dns(&p.id).await?,
         DnsStrategy::SystemDefault
+    );
+    Ok(())
+}
+
+// --- #40 outbound port policy, end to end through the store ------------------
+
+#[tokio::test]
+async fn port_policy_persists_and_defaults_to_unrestricted() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let core = Core::open(temp_config(dir.path())).await?;
+    let p = persona("22222222-2222-4222-8222-222222222222");
+    core.save_persona(&p).await?;
+
+    // Every persona created before #40 existed behaves exactly as it did.
+    assert_eq!(
+        core.get_persona_egress_ports(&p.id).await?,
+        EgressPorts::Unrestricted
+    );
+
+    // Restricting requires DoH, so bind that first.
+    core.set_persona_dns(&p.id, DnsStrategy::doh_default())
+        .await?;
+    core.set_persona_egress_ports(&p.id, EgressPorts::Https443Only)
+        .await?;
+    assert_eq!(
+        core.get_persona_egress_ports(&p.id).await?,
+        EgressPorts::Https443Only
+    );
+
+    // The combined config the decoy launch reads carries it, and the launch
+    // args disable QUIC so nothing rides UDP/443.
+    let network = core.persona_network(&p.id).await?;
+    assert_eq!(network.ports, EgressPorts::Https443Only);
+    assert!(
+        network
+            .chromium_args()
+            .iter()
+            .any(|a| a == "--disable-quic"),
+        "a 443-only persona must launch with QUIC disabled, got {:?}",
+        network.chromium_args()
+    );
+    Ok(())
+}
+
+/// The guard has to hold whichever field is set last, or a user could reach an
+/// incoherent config just by reordering two commands.
+#[tokio::test]
+async fn a_443_restriction_cannot_be_bypassed_by_setting_dns_or_egress_afterwards() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let core = Core::open(temp_config(dir.path())).await?;
+    let p = persona("33333333-3333-4333-8333-333333333333");
+    core.save_persona(&p).await?;
+
+    core.set_persona_dns(&p.id, DnsStrategy::doh_default())
+        .await?;
+    core.set_persona_egress_ports(&p.id, EgressPorts::Https443Only)
+        .await?;
+
+    // Switching DNS back to the system resolver (port 53) must be refused.
+    let Err(err) = core
+        .set_persona_dns(&p.id, DnsStrategy::SystemDefault)
+        .await
+    else {
+        panic!("system DNS under a 443 restriction must be refused");
+    };
+    assert!(matches!(err, CoreError::Network(_)), "got {err:?}");
+
+    // Routing through Tor's SOCKS port (9050) must be refused.
+    let Err(err) = core.set_persona_egress(&p.id, Egress::tor()).await else {
+        panic!("a 9050 proxy under a 443 restriction must be refused");
+    };
+    assert!(matches!(err, CoreError::Network(_)), "got {err:?}");
+
+    // The persona is unchanged by the refusals: it never entered a broken state.
+    let network = core.persona_network(&p.id).await?;
+    assert_eq!(network.egress, Egress::Direct);
+    assert!(matches!(network.dns, DnsStrategy::Doh { .. }));
+    assert_eq!(network.ports, EgressPorts::Https443Only);
+
+    // Lifting the restriction frees both again.
+    core.set_persona_egress_ports(&p.id, EgressPorts::Unrestricted)
+        .await?;
+    core.set_persona_dns(&p.id, DnsStrategy::SystemDefault)
+        .await?;
+    core.set_persona_egress(&p.id, Egress::tor()).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn an_unrestricted_persona_is_not_second_guessed() -> Result<()> {
+    // The #40 coherence rules must not start rejecting configurations that were
+    // always legitimate.
+    let dir = tempfile::tempdir()?;
+    let core = Core::open(temp_config(dir.path())).await?;
+    let p = persona("44444444-4444-4444-8444-444444444444");
+    core.save_persona(&p).await?;
+
+    core.set_persona_egress(&p.id, Egress::tor()).await?;
+    core.set_persona_dns(&p.id, DnsStrategy::SystemDefault)
+        .await?;
+    let network = core.persona_network(&p.id).await?;
+    assert_eq!(network.ports, EgressPorts::Unrestricted);
+    assert!(
+        !network
+            .chromium_args()
+            .iter()
+            .any(|a| a == "--disable-quic"),
+        "an unrestricted persona must not have QUIC disabled"
     );
     Ok(())
 }
