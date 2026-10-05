@@ -10,28 +10,33 @@
 # and --remap-path-prefix. Identical sha256 over the two binaries is the proof; a
 # mismatch fails the job and points at the nondeterminism to fix.
 #
-# WHY BOTH BUILDS RUN AT THE SAME ABSOLUTE PATH
+# WHAT THIS PROVES, AND THE TWO LEVERS THAT MAKE IT TRUE
 #
-# The two checkouts are built one after the other at ONE fixed path, rather than
-# in place at two different paths. That is not a way of dodging the harder test;
-# it is the only honest form of it here, because of the vendored OpenSSL:
+# The two checkouts live at DIFFERENT paths and are each built in place, so a
+# match here means the binary does not depend on where the source sits. Getting
+# there took two levers beyond the obvious ones, both of which were found by
+# measuring a shipped artifact rather than by reasoning:
 #
-#   rusqlite pulls `bundled-sqlcipher-vendored-openssl`, so openssl-sys compiles
-#   OpenSSL from source, and OpenSSL's own build bakes its absolute install
-#   prefix into the compiled C (ENGINESDIR and MODULESDIR, plus the bare paths).
-#   That prefix is `<checkout>/target/release/build/openssl-sys-*/out/...`, so it
-#   differs per checkout path. `--remap-path-prefix` is a RUSTC flag: it cannot
-#   rewrite a `-D` macro value passed to the C compiler, so those strings pass
-#   through untouched, .rodata differs, .text differs with it, and the GNU
-#   build-id (being content-derived) differs too. Measured: 4 differing strings,
-#   ~104 KB of knock-on differences, first divergence at byte 813.
+#   1. The vendored OpenSSL prefix. rusqlite pulls
+#      `bundled-sqlcipher-vendored-openssl`, so openssl-sys compiles OpenSSL from
+#      source, and OpenSSL's build bakes its absolute install prefix into the
+#      compiled C (ENGINESDIR, MODULESDIR). `--remap-path-prefix` cannot touch
+#      it: that is a RUSTC flag and these are `-D` macro values handed to the C
+#      compiler. The prefix derives from OUT_DIR, hence from CARGO_TARGET_DIR, so
+#      holding CARGO_TARGET_DIR fixed pins it. (Measured before the fix: 4
+#      differing strings, ~104 KB of knock-on difference, first divergence at
+#      byte 813, including the content-derived GNU build-id.)
 #
-# Building at a fixed path makes the OpenSSL prefix identical, and the two
-# builds then agree byte for byte (verified). The guarantee this lane proves is
-# therefore: an independent rebuild of the same commit, with the same toolchain,
-# AT THE SAME BUILD PATH, is byte-identical. Path-independence on top of that
-# would require the vendored OpenSSL prefix to be pinned (or SQLCipher to link a
-# system OpenSSL), which is a dependency decision, not a CI one.
+#   2. CARGO_HOME. Dependency crates compile from the registry, so their panic
+#      locations bake the builder's absolute `~/.cargo/registry/src/...` path
+#      into the binary. Those sit OUTSIDE the workspace, so the workspace remap
+#      never reached them. Measured at 1261 such strings in a shipped v0.3.0
+#      AppImage; a second remap takes it to 0.
+#
+# With both applied, two builds from different checkout paths are byte-identical
+# (verified locally before this lane was written). Note the target dir is wiped
+# between builds: sharing it would let the second reuse the first's artifacts and
+# make the comparison vacuous.
 #
 # Scope note: this verifies the CLI binary on one OS/runner (the achievable,
 # automatable guarantee). A fuller cross-machine independent rebuild is a manual
@@ -74,26 +79,28 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libdbus-1-dev libxkbcommon-dev libwayland-dev
-      # Each independent checkout is built in turn at the SAME fixed path, with a
-      # clean target dir, so nothing but the source tree is shared between them.
-      # See the header for why the path is held constant.
-      - name: Build both checkouts at one fixed path
+      # Each checkout is built IN PLACE, at its own distinct path, through one
+      # fixed CARGO_TARGET_DIR that is wiped between builds so the second cannot
+      # reuse the first's artifacts. Building in place is the point: it is what
+      # makes this a test of path-INDEPENDENCE rather than merely of determinism
+      # at one path.
+      - name: Build each checkout in place, through a fixed target dir
         run: |
           set -euo pipefail
-          fixed="${RUNNER_TEMP}/fauxx-repro"
+          target="${RUNNER_TEMP}/fauxx-target"
+          cargo_home="${CARGO_HOME:-$HOME/.cargo}"
           mkdir -p "${RUNNER_TEMP}/out"
           for src in build-a build-b; do
             echo "::group::build $src"
-            rm -rf "$fixed"
-            cp -a "$src" "$fixed"
-            rm -rf "$fixed/target"
-            ( cd "$fixed" \
-              && RUSTFLAGS="--remap-path-prefix=$fixed=/build" \
+            rm -rf "$target"
+            ( cd "$src" \
+              && CARGO_TARGET_DIR="$target" \
+                 RUSTFLAGS="--remap-path-prefix=$PWD=/build --remap-path-prefix=$cargo_home=/cargo" \
                  cargo build --release --locked --bin fauxx-cli )
-            cp "$fixed/target/release/fauxx-cli" "${RUNNER_TEMP}/out/fauxx-cli-$src"
+            cp "$target/release/fauxx-cli" "${RUNNER_TEMP}/out/fauxx-cli-$src"
             echo "::endgroup::"
           done
-          rm -rf "$fixed"
+          rm -rf "$target"
       - name: Compare byte-for-byte
         run: |
           set -euo pipefail

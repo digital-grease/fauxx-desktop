@@ -284,9 +284,69 @@ fn select_for_pairing(all: &[LocalEndpoint], limit: usize) -> Vec<&LocalEndpoint
 /// [`pairing_socket_strings`].
 pub const PAIRING_ADDR_LIMIT: usize = 3;
 
+/// Parse the `addrs` of a DECODED pairing payload into dialable socket
+/// addresses, keeping only ones a LAN peer could plausibly live at.
+///
+/// # Why this filters rather than trusting the payload
+///
+/// These strings arrive from a scanned QR or pasted text, so they are
+/// ATTACKER-INFLUENCABLE. The routing table they feed decides where this device
+/// opens TCP connections, so an unfiltered list would let a hostile pairing code
+/// aim the desktop at any host and port: a port-scan and SSRF primitive dressed
+/// up as a pairing step. Nothing confidential leaks that way (frames are sealed
+/// to the peer's key and a wrong address simply fails to deliver), but making
+/// outbound connections to arbitrary endpoints on someone's behalf is not
+/// something a pairing code should be able to ask for.
+///
+/// The filter is the one the feature's own premise justifies: a device you are
+/// pairing with is on your local network, so only private, loopback and
+/// link-local addresses are accepted. A public address in a pairing payload is
+/// not a use case, it is a red flag. The count is capped for the same reason the
+/// sender caps it.
+pub fn parse_pairing_addrs(addrs: &[String]) -> Vec<std::net::SocketAddr> {
+    addrs
+        .iter()
+        .take(PAIRING_ADDR_LIMIT)
+        .filter_map(|a| a.parse::<std::net::SocketAddr>().ok())
+        .filter(|addr| is_lan_dialable(&addr.ip()))
+        .collect()
+}
+
+/// Whether an address is one a peer on this LAN could legitimately be at.
+///
+/// Accepts loopback (a peer on this same machine, and the live tests), RFC 1918
+/// / unique-local private ranges, link-local (a phone on a DHCP-less link), and
+/// the CGNAT range some home routers hand out. Everything else, notably any
+/// globally routable address, is refused.
+fn is_lan_dialable(ip: &IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            v4.is_loopback()
+                || v4.is_private()
+                || v4.is_link_local()
+                // 100.64.0.0/10, carrier-grade NAT, used by some home routers
+                // and by Tailscale-style overlays.
+                || (v4.octets()[0] == 100 && (64..128).contains(&v4.octets()[1]))
+        }
+        IpAddr::V6(v6) => {
+            v6.is_loopback()
+                || is_v6_link_local(v6)
+                // fc00::/7 unique-local.
+                || (v6.segments()[0] & 0xfe00) == 0xfc00
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn sock(s: &str) -> std::net::SocketAddr {
+        match s.parse() {
+            Ok(addr) => addr,
+            Err(e) => panic!("test socket address {s:?} must parse: {e}"),
+        }
+    }
 
     fn ip(s: &str) -> IpAddr {
         match s.parse() {
@@ -528,6 +588,66 @@ mod tests {
         ] {
             assert!(!is_virtual_interface(name), "{name:?} must stay physical");
         }
+    }
+
+    // --- consuming a DECODED payload's addrs (#38) --------------------------
+
+    #[test]
+    fn pairing_addrs_are_parsed_into_dialable_socket_addresses() {
+        let got = parse_pairing_addrs(&[
+            "192.168.1.50:45999".to_string(),
+            "[fd00::1]:45999".to_string(),
+        ]);
+        assert_eq!(got.len(), 2, "both LAN addresses should survive: {got:?}");
+        assert_eq!(got[0], sock("192.168.1.50:45999"));
+    }
+
+    /// The guardrail. These strings come from a scanned QR, so an unfiltered
+    /// list would let a hostile pairing code aim this device's outbound
+    /// connections at anything: a port-scan and SSRF primitive.
+    #[test]
+    fn a_hostile_pairing_code_cannot_aim_us_at_a_public_host() {
+        let got = parse_pairing_addrs(&[
+            "93.184.216.34:80".to_string(),  // public
+            "8.8.8.8:53".to_string(),        // public
+            "203.0.113.7:45999".to_string(), // public (TEST-NET-3)
+        ]);
+        assert!(
+            got.is_empty(),
+            "public addresses must never enter the routing table, got {got:?}"
+        );
+    }
+
+    #[test]
+    fn only_the_lan_addresses_survive_a_mixed_list() {
+        let got = parse_pairing_addrs(&["8.8.8.8:53".to_string(), "10.0.0.9:45999".to_string()]);
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0], sock("10.0.0.9:45999"));
+    }
+
+    #[test]
+    fn loopback_and_link_local_are_accepted() {
+        // Loopback covers a peer on this machine and the live tests; link-local
+        // covers a phone on a link with no DHCP.
+        assert_eq!(
+            parse_pairing_addrs(&["127.0.0.1:45999".to_string()]).len(),
+            1
+        );
+        assert_eq!(
+            parse_pairing_addrs(&["169.254.10.4:45999".to_string()]).len(),
+            1
+        );
+        assert_eq!(parse_pairing_addrs(&["[::1]:45999".to_string()]).len(), 1);
+    }
+
+    #[test]
+    fn malformed_and_oversized_address_lists_are_handled() {
+        // Garbage is dropped rather than panicking...
+        assert!(parse_pairing_addrs(&["not-an-address".to_string(), String::new()]).is_empty());
+        // ...and the count is capped the same way the sender caps it, so a
+        // padded payload cannot stuff the routing table.
+        let many: Vec<String> = (1..=50).map(|i| format!("192.168.1.{i}:45999")).collect();
+        assert_eq!(parse_pairing_addrs(&many).len(), PAIRING_ADDR_LIMIT);
     }
 
     #[test]

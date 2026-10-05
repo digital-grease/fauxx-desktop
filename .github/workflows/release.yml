@@ -146,9 +146,11 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUILD_MANIFEST_NAME: target/distrib/${{ join(matrix.targets, '-') }}-dist-manifest.json
-      # Reproducibility levers we own. SOURCE_DATE_EPOCH
-      # pins embedded timestamps; --remap-path-prefix scrubs the absolute build
-      # path so binaries do not encode the runner's checkout directory.
+      # Reproducibility levers we own. SOURCE_DATE_EPOCH pins embedded
+      # timestamps; --remap-path-prefix scrubs the absolute build path so
+      # binaries do not encode the runner's checkout directory. A SECOND remap,
+      # for CARGO_HOME, is appended by the step below: it cannot live here
+      # because a workflow `env:` block cannot read runner variables.
       SOURCE_DATE_EPOCH: "1"
       CARGO_INCREMENTAL: "0"
       RUSTFLAGS: "--remap-path-prefix=${{ github.workspace }}=/build"
@@ -177,6 +179,25 @@ jobs:
       # is what makes the dependency graph reproducible. `cargo metadata --locked`
       # verifies it WITHOUT modifying it, so the subsequent `dist build` resolves
       # against exactly the locked versions.
+      # Dependency crates compile from CARGO_HOME, so their panic locations bake
+      # the runner's absolute registry path into the binary -- measured at 1261
+      # such strings in a shipped v0.3.0 AppImage. Those sit OUTSIDE the
+      # workspace, so the workspace remap above never touches them, and they
+      # differ between any two machines with different home directories.
+      # Remapping them is the difference between "reproducible on this runner"
+      # and "reproducible by a third party". Verified locally: 1261 -> 0.
+      - name: Extend RUSTFLAGS with a CARGO_HOME remap
+        shell: bash
+        run: |
+          set -euo pipefail
+          home="${CARGO_HOME:-$HOME/.cargo}"
+          # rustc emits Windows paths with backslashes, so the remap needle has
+          # to be in native form or it will simply never match.
+          if [ "${RUNNER_OS}" = "Windows" ]; then
+            home="$(cygpath -w "$home")"
+          fi
+          echo "RUSTFLAGS=${RUSTFLAGS} --remap-path-prefix=${home}=/cargo" >> "$GITHUB_ENV"
+
       - name: Verify Cargo.lock is current (locked deps)
         run: cargo metadata --locked --format-version 1 > /dev/null
         shell: bash

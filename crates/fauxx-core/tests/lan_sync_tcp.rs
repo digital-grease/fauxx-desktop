@@ -338,3 +338,97 @@ async fn manual_numeric_ip_push_works_without_mdns() -> Result<()> {
     assert_eq!(received.name, persona.name);
     Ok(())
 }
+
+#[tokio::test]
+async fn a_pairing_payload_address_alone_delivers_a_push_without_mdns_or_a_manual_route(
+) -> Result<()> {
+    // #38: the payload's `addrs` must actually be CONSUMED, not merely carried.
+    // Until this landed the desktop minted the field and nothing ever read it,
+    // so a phone that could not resolve the `.local.` name was no better off.
+    //
+    // This is the end-to-end proof: the sender learns the receiver's address
+    // ONLY from the pairing payload. There is no mDNS discovery and, unlike
+    // `manual_numeric_ip_push_works_without_mdns`, no `add_sync_route` call. If
+    // `complete_pairing` did not seed the route, the push would have nowhere to
+    // go and the assertion below would fail.
+    let sender_dir = tempfile::tempdir()?;
+    let receiver_dir = tempfile::tempdir()?;
+    let sender = open_core(sender_dir.path(), "Sender", 46_131).await?;
+    let receiver = open_core(receiver_dir.path(), "Receiver", 46_132).await?;
+
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .map_err(|e| CoreError::Sync(e.to_string()))?;
+    let bound = listener
+        .local_addr()
+        .map_err(|e| CoreError::Sync(e.to_string()))?;
+    let shutdown = Arc::new(Notify::new());
+    let listener_core = receiver.clone();
+    let listener_shutdown = Arc::clone(&shutdown);
+    let handle = tokio::spawn(async move {
+        listener_core
+            .serve_inbound(listener, listener_shutdown)
+            .await
+    });
+
+    // Pair BOTH ways (#42), but hand the sender a payload whose `addrs` names
+    // the port the receiver is really listening on. This is what a scanned QR
+    // carries in the field.
+    receiver
+        .complete_pairing(&sender.pairing_payload().await?.encode()?)
+        .await?;
+    let receiver_payload = receiver
+        .pairing_payload()
+        .await?
+        .with_addrs(vec![format!("127.0.0.1:{}", bound.port())]);
+    sender.complete_pairing(&receiver_payload.encode()?).await?;
+
+    // The address must also have been persisted on the peer record, so the route
+    // survives a restart -- otherwise it would be lost exactly when mDNS cannot
+    // re-derive it.
+    let paired = sender.paired_peers().await?;
+    let peer = paired
+        .first()
+        .ok_or_else(|| CoreError::Sync("the receiver should be paired".to_string()))?;
+    assert_eq!(
+        peer.addrs,
+        vec![format!("127.0.0.1:{}", bound.port())],
+        "the payload's addresses should be persisted on the paired peer"
+    );
+
+    let persona = SyntheticPersona::new(
+        "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee".to_string(),
+        "Payload Addr".to_string(),
+        "AGE_25_34".to_string(),
+        "ENGINEER".to_string(),
+        "CANADA".to_string(),
+        vec!["TECH".to_string()],
+        1_700_000_000_000,
+        1_800_000_000_000,
+    );
+    sender.save_persona(&persona).await?;
+    let pushed = sender.sync_persona_to_paired(&persona).await?;
+    assert_eq!(
+        pushed, 1,
+        "the push should route via the address the pairing payload carried"
+    );
+
+    let mut applied = None;
+    for _ in 0..50 {
+        if let Ok(p) = receiver.get_persona(&persona.id).await {
+            applied = Some(p);
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    shutdown.notify_waiters();
+    let _ = handle.await;
+
+    let received = applied.ok_or_else(|| {
+        CoreError::Sync(
+            "a push routed purely from the pairing payload's addrs should have arrived".to_string(),
+        )
+    })?;
+    assert_eq!(received.id, persona.id);
+    Ok(())
+}

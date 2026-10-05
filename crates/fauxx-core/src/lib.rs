@@ -938,7 +938,45 @@ impl Core {
     /// channel between the two devices opens; persists the paired record.
     pub async fn complete_pairing(&self, scanned_payload: &str) -> Result<PairedPeer> {
         let payload = PairingPayload::decode(scanned_payload)?;
-        self.sync_engine()?.complete_pairing(&payload).await
+        let peer = self.sync_engine()?.complete_pairing(&payload).await?;
+
+        // #38: seed the routing table from the addresses the payload carried, so
+        // a peer paired by QR is reachable IMMEDIATELY, without waiting for mDNS
+        // to resolve it. That is the whole point of the field: the failure this
+        // fixes is precisely the one where mDNS never resolves.
+        //
+        // The addresses are attacker-influencable (they come from a scanned or
+        // pasted code), so they go through `parse_pairing_addrs`, which keeps
+        // only LAN-plausible endpoints and caps the count. See that function for
+        // why an unfiltered list would be a port-scan primitive.
+        self.seed_routes_from_addrs(&peer.public_key, &payload.addrs)
+            .await;
+        Ok(peer)
+    }
+
+    /// Insert the first usable LAN address for a peer into the routing table.
+    ///
+    /// Best-effort and deliberately silent: LAN sync may be off (no table), the
+    /// key may not decode, or every address may be filtered out. None of those
+    /// is a reason to fail a pairing that otherwise succeeded, because the
+    /// mDNS path and the manual `add_sync_route` path both still work.
+    async fn seed_routes_from_addrs(&self, peer_public_key: &str, addrs: &[String]) {
+        let Some(routes) = self.inner.sync_routes.as_ref() else {
+            return;
+        };
+        let Ok(pk) = sync::decode_public_key(peer_public_key) else {
+            return;
+        };
+        let usable = sync::parse_pairing_addrs(addrs);
+        let Some(addr) = usable.first().copied() else {
+            return;
+        };
+        routes.lock().await.insert(pk, addr);
+        tracing::info!(
+            target: "fauxx_core::sync",
+            peer = %sync::fingerprint(&pk),
+            "seeded a sync route from the pairing payload's address hint"
+        );
     }
 
     /// List paired (trusted) peers.
@@ -1055,6 +1093,29 @@ impl Core {
                 .iter()
                 .find_map(|a| a.parse::<std::net::SocketAddr>().ok())
             {
+                table.insert(pk, addr);
+                set += 1;
+            }
+        }
+        drop(table);
+
+        // #38: mDNS is exactly what fails in the case this feature exists for, so
+        // fall back to the addresses each paired peer advertised when it was
+        // paired. Discovery wins where it works (it tracks a DHCP lease change);
+        // this only fills the gaps it leaves, and it survives a restart because
+        // the addresses are persisted on the peer record.
+        for peer in self.paired_peers().await.unwrap_or_default() {
+            if peer.addrs.is_empty() {
+                continue;
+            }
+            let Ok(pk) = sync::decode_public_key(&peer.public_key) else {
+                continue;
+            };
+            let mut table = routes.lock().await;
+            if table.contains_key(&pk) {
+                continue;
+            }
+            if let Some(addr) = sync::parse_pairing_addrs(&peer.addrs).first().copied() {
                 table.insert(pk, addr);
                 set += 1;
             }

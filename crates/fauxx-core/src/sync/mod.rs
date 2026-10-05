@@ -63,8 +63,8 @@ use tokio::sync::Mutex;
 pub use crypto::{DeviceIdentity, SealedEnvelope, MAC_LEN, NONCE_LEN, PUBLIC_KEY_LEN};
 pub use discovery::{AdvertisedDevice, MdnsDiscovery};
 pub use endpoints::{
-    local_endpoints, local_socket_strings, pairing_socket_strings, LocalEndpoint,
-    PAIRING_ADDR_LIMIT,
+    local_endpoints, local_socket_strings, pairing_socket_strings, parse_pairing_addrs,
+    LocalEndpoint, PAIRING_ADDR_LIMIT,
 };
 pub use peer::{DiscoveredPeer, PairedPeer};
 pub use qr::PairingQr;
@@ -377,7 +377,8 @@ impl LanSync {
             scanned.host.clone(),
             scanned.port,
             now_millis(),
-        );
+        )
+        .with_addrs(scanned.addrs.clone());
         self.with_store(|store| store.save_paired_peer(&peer))
             .await?;
         tracing::info!(

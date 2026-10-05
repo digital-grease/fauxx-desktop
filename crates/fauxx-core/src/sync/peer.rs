@@ -75,11 +75,32 @@ pub struct PairedPeer {
     pub host: Option<String>,
     /// Last known sync port.
     pub port: u16,
+    /// Literal `IP:port` endpoints this peer advertised at pairing time (#38).
+    ///
+    /// Persisted so the route survives a restart. The whole point of these is
+    /// the case where mDNS discovery does NOT work, and a route learned only at
+    /// pairing time would otherwise be lost the moment the process exits,
+    /// putting the user back where they started.
+    ///
+    /// Additive: omitted when empty, so a peer record written before this field
+    /// existed loads unchanged.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub addrs: Vec<String>,
     /// Epoch milliseconds when pairing was completed.
     pub paired_at: i64,
 }
 
 impl PairedPeer {
+    /// Attach the literal endpoints this peer advertised at pairing time.
+    ///
+    /// Separate from [`new`](Self::new) so the address list stays additive and
+    /// every existing caller keeps building the record it always did.
+    #[must_use]
+    pub fn with_addrs(mut self, addrs: Vec<String>) -> Self {
+        self.addrs = addrs;
+        self
+    }
+
     /// Build a paired-peer record from its public-key bytes and metadata,
     /// stamping the fingerprint.
     pub fn new(
@@ -95,6 +116,7 @@ impl PairedPeer {
             fingerprint: fingerprint(public_key),
             host,
             port,
+            addrs: Vec::new(),
             paired_at,
         }
     }
