@@ -64,7 +64,7 @@ targets = [
 # GUID) inside each crate's Cargo.toml, and this milestone may not edit the
 # crates. Enabling msi is tracked as a follow-up that belongs to the crate
 # owners (the "Windows installer / MSI" follow-up). Windows users still
-# get a signed .exe inside the zip archive plus the powershell installer.
+# get the .exe inside the zip archive plus the powershell installer.
 installers = ["shell", "powershell"]
 # The desktop binary embeds Noto Sans (apps/desktop/src/font.rs uses include_bytes!),
 # and OFL 1.1 clause 2 requires the licence and its copyright notice to accompany
@@ -112,22 +112,20 @@ allow-dirty = ["ci", "msi"]
 # ---------------------------------------------------------------------------
 # Code signing.
 #
-# Both blocks are gated on repository secrets. When the secrets are absent (the
-# current state: this repo is private and the certs are not provisioned yet),
-# signing is skipped and the release still succeeds with unsigned binaries plus
-# the GitHub attestations above. Provisioning the secrets is a documented TODO,
-# NOT a hard build dependency.
+# Windows signing is OFF and macOS signing is gated on repository secrets.
+# Unsigned releases still ship the GitHub attestations above.
 # ---------------------------------------------------------------------------
 
-# Windows Authenticode signing via SSL.com eSigner (cloud signing, no local
-# HSM). dist signs the Windows .exe (and msi, once enabled) only when the four
-# SSLDOTCOM_* secrets are configured on the repo:
-#   SSLDOTCOM_USERNAME, SSLDOTCOM_PASSWORD, SSLDOTCOM_CREDENTIAL_ID,
-#   SSLDOTCOM_TOTP_SECRET
-# "prod" uses the production eSigner endpoint; switch to "test" for an SSL.com
-# sandbox credential. TODO(secrets): provision the SSL.com eSigner credential
-# and add the four secrets before the first public Windows release.
-ssldotcom-windows-sign = "prod"
+# Windows Authenticode signing via SSL.com eSigner is DISABLED because no
+# eSigner account exists. Do not re-enable it with the secrets absent: dist does
+# NOT skip signing when the SSLDOTCOM_* variables are empty. It runs SSL.com's
+# CodeSignTool with blank credentials, which fails authentication. Older
+# CodeSignTool builds exited 0 on that failure (v0.2.1 shipped unsigned without
+# noticing); current builds exit non-zero and fail the whole release.
+# To enable: provision an eSigner credential, add the four repo secrets
+# (SSLDOTCOM_USERNAME, SSLDOTCOM_PASSWORD, SSLDOTCOM_CREDENTIAL_ID,
+# SSLDOTCOM_TOTP_SECRET), restore their env lines in release.yml, and set:
+# ssldotcom-windows-sign = "prod"
 
 # macOS code signing + notarization.
 #

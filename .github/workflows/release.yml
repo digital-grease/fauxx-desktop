@@ -17,10 +17,10 @@
 #
 # Triggers: a pushed `v*` tag, OR a manual workflow_dispatch.
 #
-# Signing is OPTIONAL and gated on repository secrets. Windows Authenticode
-# (SSL.com eSigner) and macOS Developer ID signing run only when their secrets
-# are present; absent secrets skip signing without failing the release. See the
-# TODO(secrets) notes in dist-workspace.toml.
+# Signing: macOS Developer ID signing is OPTIONAL and gated on repository
+# secrets (absent secrets skip it without failing the release). Windows
+# Authenticode (SSL.com eSigner) is disabled; see the code signing block in
+# dist-workspace.toml.
 
 name: Release
 
@@ -154,12 +154,8 @@ jobs:
       SOURCE_DATE_EPOCH: "1"
       CARGO_INCREMENTAL: "0"
       RUSTFLAGS: "--remap-path-prefix=${{ github.workspace }}=/build"
-      # Windows Authenticode via SSL.com eSigner. dist signs only when all four
-      # are non-empty; absent secrets skip signing (no hard failure).
-      SSLDOTCOM_USERNAME: ${{ secrets.SSLDOTCOM_USERNAME }}
-      SSLDOTCOM_PASSWORD: ${{ secrets.SSLDOTCOM_PASSWORD }}
-      SSLDOTCOM_CREDENTIAL_ID: ${{ secrets.SSLDOTCOM_CREDENTIAL_ID }}
-      SSLDOTCOM_TOTP_SECRET: ${{ secrets.SSLDOTCOM_TOTP_SECRET }}
+      # Windows Authenticode (SSL.com eSigner) is disabled; see the code
+      # signing block in dist-workspace.toml before re-adding SSLDOTCOM_* here.
     steps:
       - uses: actions/checkout@v4
         with:
