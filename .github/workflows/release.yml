@@ -368,7 +368,17 @@ jobs:
         run: |
           dist build --artifacts=global --output-format=json > dist-manifest.json
           echo "dist ran successfully"
-          jq --raw-output ".artifacts[]?.path | select( . != null )" dist-manifest.json > uploads.txt
+          # The manifest's paths are ABSOLUTE paths on whichever runner built
+          # each artifact (/Users/runner/..., D:\a\...), so most do not exist on
+          # this Linux job. Re-point each one at the copy "Fetch local
+          # artifacts" downloaded into target/distrib/ and keep only files that
+          # exist; otherwise the attest only passes when the merged manifest
+          # happens to carry a Linux path.
+          jq --raw-output '.artifacts[]?.path | select( . != null ) | split("/") | last | split("\\") | last' dist-manifest.json \
+            | sort -u \
+            | while read -r name; do
+                if [ -f "target/distrib/$name" ]; then echo "target/distrib/$name"; fi
+              done > uploads.txt
           {
             echo "uploads<<EOF"
             cat uploads.txt
