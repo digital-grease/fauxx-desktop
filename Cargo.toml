@@ -92,7 +92,7 @@ rusqlite = { version = "=0.40.1", features = ["bundled-sqlcipher-vendored-openss
 keyring-core = "=1.0.0"
 dbus-secret-service-keyring-store = "=1.0.0"
 linux-keyutils-keyring-store = "=1.0.0"
-apple-native-keyring-store = "=1.0.0"
+apple-native-keyring-store = "=1.0.2"
 windows-native-keyring-store = "=1.0.0"
 # Headless key fallback (no-D-Bus hosts, C8 #35): an Argon2id-derived key
 # encrypts a key file when the OS keystore is unavailable. Stable line, not the
