@@ -72,7 +72,7 @@ tray-icon = "=0.24.1"
 # zbus (no GTK/glib, no C libdbus), so the Linux GUI graph carries none of the
 # unmaintained gtk-rs GTK3 crates nor the glib unsoundness. Default features =
 # [tokio], so it shares the GUI client's tokio runtime. Used on Linux only.
-ksni = "=0.3.5"
+ksni = "=0.3.6"
 # Native file dialogs for the GUI (wizard import, export paths). Gated behind
 # `gui`.
 rfd = "=0.15.4"
