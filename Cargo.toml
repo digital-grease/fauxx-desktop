@@ -209,7 +209,7 @@ chromiumoxide = "=0.9.1"
 # chromiumoxide's `Handler` is a `futures::stream::Stream` pumped via
 # `StreamExt::next()`; this is its own transitive async-plumbing crate, pinned to
 # the exact resolved version so the graph gains no new distinct version.
-futures-util = { version = "=0.3.32", default-features = false, features = ["std"] }
+futures-util = { version = "=0.3.34", default-features = false, features = ["std"] }
 
 # --- Deterministic-channel defense (C3) ---
 # Date math + formatting for DSAR statutory deadlines (C3 #16 D2c): GDPR one
