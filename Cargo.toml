@@ -155,7 +155,7 @@ if-addrs = "=0.15.0"
 # `-no-provider` skips the bundled provider so we install `ring` ourselves,
 # which drops aws-lc-sys, cmake, and quinn: 13 crates instead of 22, and no new
 # C build system on any target.
-reqwest = { version = "=0.13.4", default-features = false, features = ["rustls-no-provider"] }
+reqwest = { version = "=0.13.5", default-features = false, features = ["rustls-no-provider"] }
 # The rustls crypto provider for the update check. Installed lazily, on the
 # first check, so a user who never presses the button never initializes TLS.
 rustls = { version = "=0.23.45", default-features = false, features = ["ring", "std", "tls12"] }
