@@ -81,7 +81,7 @@ rfd = "=0.15.4"
 # SQLCipher store. `bundled-sqlcipher-vendored-openssl` statically vendors both
 # SQLCipher and its crypto, so there is no per-OS system-lib hunting and the
 # release artifacts stay reproducible.
-rusqlite = { version = "=0.40.1", features = ["bundled-sqlcipher-vendored-openssl"] }
+rusqlite = { version = "=0.40.2", features = ["bundled-sqlcipher-vendored-openssl"] }
 # OS keystore for the DB key. The keyring-rs 4.x LIBRARY is keyring-core plus
 # per-OS backend store crates; the `keyring` umbrella crate (4.0.1) is a
 # CLI/sample crate that hard-depends on clap ^4.6.1 and collides with our
