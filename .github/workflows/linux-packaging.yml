@@ -61,10 +61,14 @@ jobs:
       # Same Linux GUI build deps as ci.yml's gui lane: iced/winit need
       # libxkbcommon + wayland; the keystore's dbus-secret-service needs libdbus +
       # pkg-config. The tray is ksni (pure Rust), so no GTK3/appindicator libs.
+      # libxkbcommon-x11-0, libxcursor1 and libxi6 are not build deps: they are the
+      # runtime libraries winit dlopens, installed here only so linuxdeploy can
+      # copy them into the image (see "Build the AppImage").
       - name: Install GUI build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxkbcommon-dev libwayland-dev libdbus-1-dev pkg-config
+          sudo apt-get install -y libxkbcommon-dev libwayland-dev libdbus-1-dev pkg-config \
+            libxkbcommon-x11-0 libxcursor1 libxi6
 
       # rust-toolchain.toml pins 1.96.0, which this respects.
       - uses: dtolnay/rust-toolchain@stable
@@ -124,21 +128,34 @@ jobs:
             https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
           chmod +x linuxdeploy
 
-      # linuxdeploy bundles the app's shared-library deps (wayland/xkbcommon/dbus,
-      # etc.) but deliberately EXCLUDES host-provided libraries (libGL, Vulkan,
-      # libwayland-client, glibc, ...) per the AppImage excludelist, so the image
-      # uses the host's GPU drivers and compositor libs rather than shipping stale
-      # ones. UPDATE_INFORMATION makes appimagetool embed the update channel and
-      # emit the matching .zsync, satisfying AppImageUpdate / AppImageLauncher.
+      # linuxdeploy only bundles what the binary declares as DT_NEEDED, and the
+      # binary declares nothing beyond glibc/libgcc: winit dlopens its windowing
+      # libraries at runtime (xkbcommon-dl, x11-dl), so linuxdeploy cannot see
+      # them and, left alone, ships an image with no libraries at all. That image
+      # panics at startup on any host without them ("Library libxkbcommon-x11.so
+      # could not be loaded", AppImage/appimage.github.io#7029). So the dlopened
+      # libraries are named explicitly with --library; linuxdeploy then pulls in
+      # their own deps (libxcb-xkb, libXrender, libXfixes, ...) and sets the
+      # binary's RUNPATH so dlopen finds them in usr/lib. The ones winit also
+      # dlopens that ARE on the AppImage excludelist (libX11, libX11-xcb, libxcb,
+      # libwayland-client, libGL/EGL, Vulkan) stay host-provided on purpose, so
+      # the image uses the host's display server and GPU drivers.
+      # UPDATE_INFORMATION makes appimagetool embed the update channel and emit
+      # the matching .zsync, satisfying AppImageUpdate / AppImageLauncher.
       - name: Build the AppImage
         run: |
           set -euo pipefail
           export VERSION="${{ steps.meta.outputs.version }}"
           export OUTPUT="Fauxx_Desktop_Companion-${VERSION}-x86_64.AppImage"
           export UPDATE_INFORMATION="gh-releases-zsync|digital-grease|fauxx-desktop|latest|Fauxx_Desktop_Companion-*-x86_64.AppImage.zsync"
+          LIBDIR=/usr/lib/x86_64-linux-gnu
           ./linuxdeploy \
             --appdir AppDir \
             --executable target/release/fauxx-desktop \
+            --library "$LIBDIR/libxkbcommon.so.0" \
+            --library "$LIBDIR/libxkbcommon-x11.so.0" \
+            --library "$LIBDIR/libXcursor.so.1" \
+            --library "$LIBDIR/libXi.so.6" \
             --desktop-file "packaging/linux/${APP_ID}.desktop" \
             --icon-file "packaging/linux/icons/hicolor/256x256/apps/${APP_ID}.png" \
             --output appimage
@@ -146,6 +163,37 @@ jobs:
           sha256sum "$OUTPUT" | tee "$OUTPUT.sha256"
           # Export the resolved filename so the upload steps below can reference it.
           echo "OUTPUT=$OUTPUT" >> "$GITHUB_ENV"
+
+      # Start the image the way the AppImage catalog's test does: a clean
+      # ubuntu:22.04 (the glibc floor) with only Xvfb and the excludelist X
+      # libraries a desktop always has, nothing else. The builder itself cannot
+      # prove this, because it has every library installed. Runs before the
+      # upload steps so an image that cannot start is never published.
+      - name: Smoke-test the AppImage on a clean host
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD/$OUTPUT:/app.AppImage:ro" ubuntu:22.04 bash -c '
+            set -u
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq >/dev/null
+            apt-get install -y -qq xvfb x11-utils libx11-6 libx11-xcb1 libxcb1 >/dev/null
+            Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &
+            sleep 2
+            export DISPLAY=:99 HOME=/tmp/home APPIMAGE_EXTRACT_AND_RUN=1
+            mkdir -p "$HOME"
+            cp /app.AppImage /tmp/app.AppImage && chmod +x /tmp/app.AppImage
+            /tmp/app.AppImage > /tmp/app.log 2>&1 &
+            pid=$!
+            sleep 15
+            if kill -0 "$pid" 2>/dev/null && xwininfo -root -tree | grep -q "\"Fauxx"; then
+              echo "AppImage started and opened a window"
+              exit 0
+            fi
+            echo "::error::AppImage did not start on a clean ubuntu:22.04 host"
+            cat /tmp/app.log
+            xwininfo -root -tree || true
+            exit 1
+          '
 
       # Dry run (workflow_dispatch): keep the image as a downloadable artifact so
       # the packaging can be validated end to end without publishing anything.
