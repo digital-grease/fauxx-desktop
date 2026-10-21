@@ -42,7 +42,7 @@ tokio = { version = "=1.52.3", features = ["rt-multi-thread", "macros", "sync", 
 # serde stack for the persona/measurement data model and the cross-device wire
 # schema (C1). Field names must mirror the Android SyntheticPersona exactly.
 serde = { version = "=1.0.228", features = ["derive"] }
-serde_json = "=1.0.150"
+serde_json = "=1.0.154"
 # Typed library errors (core) vs flexible application errors (binaries).
 thiserror = "=1.0.69"
 # 1.0.103+ fixes RUSTSEC-2026-0190 (unsound Error::downcast_mut after Error::context).
