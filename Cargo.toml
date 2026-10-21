@@ -214,7 +214,7 @@ futures-util = { version = "=0.3.32", default-features = false, features = ["std
 # --- Deterministic-channel defense (C3) ---
 # Date math + formatting for DSAR statutory deadlines (C3 #16 D2c): GDPR one
 # month, CCPA 45 days, computed from the send date. Pure-Rust, no native deps.
-time = { version = "=0.3.47", features = ["formatting", "parsing", "macros"] }
+time = { version = "=0.3.55", features = ["formatting", "parsing", "macros"] }
 
 # --- Measurement & analytics (C4) ---
 # Statistical distributions (Student-t / normal CDF) for the control-profile A/B
