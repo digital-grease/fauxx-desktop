@@ -93,6 +93,17 @@ ignore = [
     # release up. REMOVE this entry once iced ships a resvg that no longer depends
     # on rustybuzz.
     "RUSTSEC-2026-0206",
+    # `zvariant`, `zvariant_derive`, `zbus_names` (4.x and 5.x lines): UNMAINTAINED
+    # (not vulnerabilities). They were not abandoned: zbus 6.0 folded them in as
+    # its `wire` and `names` modules, so the standalone crates get no more
+    # releases. Every zbus 4/5 user still pulls them: our own `zbus =5.16.0`
+    # (fauxx-core keystore), plus transitive `ksni` (Linux tray), `ashpd` (rfd
+    # file dialog), `mundy` (iced_winit) and `dark-light` (zbus 4.x). Moving our
+    # pin to zbus 6 alone would not drop them while those crates stay on 5.x/4.x.
+    # REMOVE these once ksni, ashpd, mundy/iced and dark-light are all on zbus 6.
+    "RUSTSEC-2026-0370", # zvariant
+    "RUSTSEC-2026-0371", # zbus_names
+    "RUSTSEC-2026-0372", # zvariant_derive
     # NOTE: the tokio broadcast unsoundness (RUSTSEC-2025-0023) is fixed by the
     # patched tokio pin (root Cargo.toml), not ignored.
 ]
