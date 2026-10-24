@@ -54,7 +54,7 @@ tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
 # Rotating, bounded debug-log file for the bug-report path (persisted local logs
 # the user can export, scrubbed, to a GitHub issue). Used synchronously (not the
 # non_blocking writer) so a panic line is flushed before `panic = "abort"`.
-tracing-appender = "=0.2.3"
+tracing-appender = "=0.2.5"
 # CLI / headless entrypoint (C0 #4). `env` lets flags fall back to env vars,
 # which the 24/7 homelab deployment (C8 #35) relies on.
 clap = { version = "=4.5.20", features = ["derive", "env"] }
