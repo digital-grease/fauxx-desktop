@@ -186,7 +186,7 @@ base64 = "=0.22.1"
 # Seedable RNG for the household timeline scheduler (C1 #10 O4): staggering
 # jitter and Poisson-like inter-arrival sampling (derived from uniform draws,
 # mirroring the Android PoissonScheduler), with a fixed seed in tests.
-rand = "=0.10.1"
+rand = "=0.10.3"
 
 # --- Idle/lock detection for the rate planner (C8 #32 U1) ---
 # Linux: query logind (org.freedesktop.login1) over D-Bus for IdleHint /
