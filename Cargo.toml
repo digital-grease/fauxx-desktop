@@ -89,7 +89,7 @@ rusqlite = { version = "=0.40.1", features = ["bundled-sqlcipher-vendored-openss
 # backends in target-specific blocks (Linux prefers the persistent D-Bus Secret
 # Service, with in-kernel keyutils as the no-D-Bus fallback; the durable
 # headless path is the Argon2id passphrase-file KeySource).
-keyring-core = "=1.0.0"
+keyring-core = "=1.0.1"
 dbus-secret-service-keyring-store = "=1.0.0"
 linux-keyutils-keyring-store = "=1.0.0"
 apple-native-keyring-store = "=1.0.0"
