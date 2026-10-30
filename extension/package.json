@@ -8,6 +8,6 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "eslint": "10.5.0",
-    "globals": "17.6.0"
+    "globals": "17.13.0"
   }
 }
