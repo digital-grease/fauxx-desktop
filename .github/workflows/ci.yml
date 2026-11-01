@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.96.0"
+          toolchain: "1.99.1"
           components: rustfmt
       - run: cargo fmt --all -- --check
 
@@ -58,7 +58,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.96.0"
+          toolchain: "1.99.1"
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-targets -- -D warnings
@@ -74,7 +74,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.96.0"
+          toolchain: "1.99.1"
       - uses: Swatinem/rust-cache@v2
       # openssl-src (via rusqlite's vendored-sqlcipher OpenSSL) builds OpenSSL from
       # source and needs a full Perl; on Windows the Git-bash MSYS perl is missing
@@ -93,7 +93,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.96.0"
+          toolchain: "1.99.1"
       - name: assert no GUI/windowing crate in the default graph
         run: |
           if cargo tree -e features | grep -Ei '(^|[ |`-])(iced|tray-icon|winit|wgpu|rfd)( |$|v)'; then
@@ -112,7 +112,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.96.0"
+          toolchain: "1.99.1"
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - name: Use Strawberry Perl for openssl-src (Windows)
@@ -172,7 +172,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.96.0"
+          toolchain: "1.99.1"
       - uses: Swatinem/rust-cache@v2
       - run: cargo doc --workspace --no-deps
 
@@ -183,7 +183,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.96.0"
+          toolchain: "1.99.1"
       - uses: Swatinem/rust-cache@v2
       # A real browser to exercise the GPC live paths the unit tests cannot:
       # the decoy emitting Sec-GPC:1 + navigator.globalPrivacyControl (AC1) and
@@ -219,7 +219,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.96.0"
+          toolchain: "1.99.1"
       - uses: Swatinem/rust-cache@v2
       - name: install Chromium
         id: chromium
@@ -252,7 +252,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.96.0"
+          toolchain: "1.99.1"
       - uses: Swatinem/rust-cache@v2
       # A named lane for the deterministic wire-contract vectors (the crypto_box
       # golden vector, the E13 cross-device interop vector, the pinned
@@ -288,7 +288,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.96.0"
+          toolchain: "1.99.1"
       - uses: Swatinem/rust-cache@v2
       - name: install cargo-mutants
         uses: taiki-e/install-action@v2
@@ -381,7 +381,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.96.0"
+          toolchain: "1.99.1"
           components: llvm-tools-preview
       - uses: Swatinem/rust-cache@v2
       - name: install cargo-llvm-cov
