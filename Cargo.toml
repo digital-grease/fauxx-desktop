@@ -97,7 +97,7 @@ windows-native-keyring-store = "=1.0.0"
 # Headless key fallback (no-D-Bus hosts, C8 #35): an Argon2id-derived key
 # encrypts a key file when the OS keystore is unavailable. Stable line, not the
 # 0.6 rc.
-argon2 = "=0.5.3"
+argon2 = "=0.6.0"
 chacha20poly1305 = "=0.10.1"
 # Explicit zeroize of decrypted key material.
 zeroize = "=1.8.2"
