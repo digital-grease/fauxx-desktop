@@ -168,7 +168,7 @@ jobs:
       - name: Install the pinned Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.96.0"
+          toolchain: "1.99.1"
       - name: Install dist (pinned)
         run: ${{ matrix.install-dist }}
       # Fail closed if Cargo.lock is missing or stale: a current, committed lock

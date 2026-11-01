@@ -19,7 +19,7 @@
 # --- build stage ----------------------------------------------------------
 # The toolchain is pinned in rust-toolchain.toml (1.96.0); this base tag tracks
 # a recent stable, and rustup honors the pinned channel inside the workspace.
-FROM rust:1.96-bookworm AS build
+FROM rust:1.98-bookworm AS build
 
 # The encrypted store vendors SQLCipher + OpenSSL (bundled-sqlcipher-vendored-
 # openssl), so the build needs a C toolchain and perl (for the OpenSSL build).
