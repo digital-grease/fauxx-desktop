@@ -182,7 +182,7 @@ ttf-parser = "=0.25.1"
 qrcode = "=0.14.1"
 # Compact text encoding of the public key / connection hint inside the QR
 # payload and the sealed envelope framing.
-base64 = "=0.22.1"
+base64 = "=0.23.1"
 # Seedable RNG for the household timeline scheduler (C1 #10 O4): staggering
 # jitter and Poisson-like inter-arrival sampling (derived from uniform draws,
 # mirroring the Android PoissonScheduler), with a fixed seed in tests.
