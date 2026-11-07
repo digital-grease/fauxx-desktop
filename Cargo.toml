@@ -133,7 +133,7 @@ rpassword = "=7.5.4"
 # Pure-Rust NaCl: crypto_box sealed boxes for the libsodium-sealed persona
 # channel (the phone side, E13, must match this; sealed-box = crypto_box). No C
 # libsodium dependency, so cross-OS reproducible builds stay clean.
-dryoc = "=0.8.0"
+dryoc = "=0.9.0"
 # Pure-Rust mDNS service registration + browsing for phone <-> desktop LAN
 # discovery (no Avahi/Bonjour system daemon).
 mdns-sd = "=0.20.0"
