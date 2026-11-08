@@ -175,7 +175,7 @@ url = "=2.5.8"
 # at startup, so the bundled-font tests exercise the real path rather than a
 # hand-rolled parser. iced 0.14 -> cosmic-text 0.15 -> fontdb 0.23 -> ttf-parser
 # 0.25; both are already in the graph transitively, so these add no new crate.
-fontdb = "=0.23.0"
+fontdb = "=0.24.0"
 ttf-parser = "=0.25.1"
 # QR generation for out-of-band pairing (desktop shows a QR carrying its public
 # key + connection hint; the phone scans it).
