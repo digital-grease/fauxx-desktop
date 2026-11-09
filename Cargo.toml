@@ -228,7 +228,7 @@ csv = "=1.4.0"
 # (no native deps); uses the built-in standard fonts (no bundled TTF).
 # default-features = false drops the heavy `html` default (azul/kuchiki layout
 # graph) we do not use: the export only places text with built-in fonts.
-printpdf = { version = "=0.9.1", default-features = false }
+printpdf = { version = "=0.12.8", default-features = false }
 
 # --- Orchestration & UX (C8 #36 U5) ---
 # MQTT client for the Home Assistant integration (status/efficacy sensors +
