@@ -253,7 +253,7 @@ ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["std
 # Unicode NFKC before matching so fullwidth/ligature evasion cannot smuggle a
 # harmful phrase past the guard. `regex` runs the blocklist's regex patterns;
 # `unicode-normalization` does the NFKC fold. Both are pure-Rust, MIT/Apache.
-regex = { version = "=1.12.4", default-features = false, features = ["std", "unicode"] }
+regex = { version = "=1.13.1", default-features = false, features = ["std", "unicode"] }
 unicode-normalization = "=0.1.25"
 
 # Hardened, reproducibility-friendly release profile (mirrors cairn). The
