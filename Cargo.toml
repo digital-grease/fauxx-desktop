@@ -57,7 +57,7 @@ tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
 tracing-appender = "=0.2.3"
 # CLI / headless entrypoint (C0 #4). `env` lets flags fall back to env vars,
 # which the 24/7 homelab deployment (C8 #35) relies on.
-clap = { version = "=4.5.20", features = ["derive", "env"] }
+clap = { version = "=4.6.7", features = ["derive", "env"] }
 # GUI client (C0 #5). MIT-licensed, pure-Rust MVU. Behind the opt-in `gui`
 # feature so the default/CLI build links no windowing dependencies. The `tokio`
 # feature enables `Task::perform(spawn_blocking(...))` to keep the UI thread
