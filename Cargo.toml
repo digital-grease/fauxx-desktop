@@ -105,7 +105,7 @@ zeroize = "=1.8.2"
 # portable, counter-based `pick` primitive shared byte-for-byte with the Android
 # app (fauxx#242). Already in the graph transitively (RustCrypto); pinned here to
 # the resolved version so making it a direct dep adds no new edge.
-sha2 = "=0.10.9"
+sha2 = "=0.11.1"
 # Persona ids (UUID v4) for the persona model that mirrors the Android
 # SyntheticPersona.
 uuid = { version = "=1.23.3", features = ["v4", "serde"] }
