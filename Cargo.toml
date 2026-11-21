@@ -41,7 +41,7 @@ todo = "warn"
 tokio = { version = "=1.52.3", features = ["rt-multi-thread", "macros", "sync", "time", "signal"] }
 # serde stack for the persona/measurement data model and the cross-device wire
 # schema (C1). Field names must mirror the Android SyntheticPersona exactly.
-serde = { version = "=1.0.228", features = ["derive"] }
+serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.150"
 # Typed library errors (core) vs flexible application errors (binaries).
 thiserror = "=1.0.69"
