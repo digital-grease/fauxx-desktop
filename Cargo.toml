@@ -127,7 +127,7 @@ proptest = "=1.11.0"
 # CLI: graceful Ctrl-C shutdown for `agent run`, and hidden passphrase prompt
 # for unlocking the encrypted store on an interactive host (C0 #4, C8 #35).
 ctrlc = "=3.5.2"
-rpassword = "=7.5.4"
+rpassword = "=7.5.5"
 
 # --- Cross-device sync (C1 #7 O1) ---
 # Pure-Rust NaCl: crypto_box sealed boxes for the libsodium-sealed persona
