@@ -117,7 +117,7 @@ directories = "=6.0.0"
 dark-light = "=1.1.1"
 # Object-safe async traits where the API needs `Box<dyn _>` backends (browser,
 # egress); concrete facades use inherent `async fn` and do not need this.
-async-trait = "=0.1.89"
+async-trait = "=0.1.92"
 # Temp dirs for store tests (dev-dependency).
 tempfile = "=3.27.0"
 # Property-based testing with shrinking (dev-dependency). Fuzzes the
