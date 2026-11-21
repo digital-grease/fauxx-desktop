@@ -136,7 +136,7 @@ rpassword = "=7.5.4"
 dryoc = "=0.8.0"
 # Pure-Rust mDNS service registration + browsing for phone <-> desktop LAN
 # discovery (no Avahi/Bonjour system daemon).
-mdns-sd = "=0.20.0"
+mdns-sd = "=0.21.7"
 # Local interface enumeration, so the desktop can tell the user (and put in the
 # pairing payload) the addresses a phone can actually dial. mDNS advertises a
 # `.local.` hostname, which Android cannot reliably resolve on its own, so a
