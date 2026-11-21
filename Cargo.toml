@@ -75,7 +75,7 @@ tray-icon = "=0.24.1"
 ksni = "=0.3.5"
 # Native file dialogs for the GUI (wizard import, export paths). Gated behind
 # `gui`.
-rfd = "=0.15.4"
+rfd = "=0.18.0"
 
 # --- Encrypted store + keystore (C0 #3) ---
 # SQLCipher store. `bundled-sqlcipher-vendored-openssl` statically vendors both
