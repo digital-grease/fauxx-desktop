@@ -98,7 +98,7 @@ windows-native-keyring-store = "=1.0.0"
 # encrypts a key file when the OS keystore is unavailable. Stable line, not the
 # 0.6 rc.
 argon2 = "=0.5.3"
-chacha20poly1305 = "=0.10.1"
+chacha20poly1305 = "=0.11.0"
 # Explicit zeroize of decrypted key material.
 zeroize = "=1.8.2"
 # Pure-Rust SHA-256 for the per-persona device-identity derivation (#47): the
