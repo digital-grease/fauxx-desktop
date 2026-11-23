@@ -26,13 +26,6 @@ ignore = [
     # target-agnostic Cargo.lock (and cargo-deny's per-edge cfg union) keep that
     # never-built edge. They cannot be dropped while tray-icon is the
     # Windows/macOS tray; a real per-target build links none of them.
-    "RUSTSEC-2024-0412", # gdk
-    "RUSTSEC-2024-0413", # atk
-    "RUSTSEC-2024-0415", # gdk-sys
-    "RUSTSEC-2024-0416", # atk-sys
-    "RUSTSEC-2024-0418", # gtk
-    "RUSTSEC-2024-0419", # gtk-sys
-    "RUSTSEC-2024-0420", # gtk3-macros
     "RUSTSEC-2024-0370", # proc-macro-error (via gtk3-macros)
     # `paste` (proc-macro), unmaintained but inert at runtime; pulled by the
     # macOS Metal backend (metal -> paste) under wgpu/iced. No maintained
