@@ -126,7 +126,7 @@ tempfile = "=3.27.0"
 proptest = "=1.11.0"
 # CLI: graceful Ctrl-C shutdown for `agent run`, and hidden passphrase prompt
 # for unlocking the encrypted store on an interactive host (C0 #4, C8 #35).
-ctrlc = "=3.5.2"
+ctrlc = "=3.5.3"
 rpassword = "=7.5.4"
 
 # --- Cross-device sync (C1 #7 O1) ---
