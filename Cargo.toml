@@ -220,7 +220,7 @@ time = { version = "=0.3.47", features = ["formatting", "parsing", "macros"] }
 # Statistical distributions (Student-t / normal CDF) for the control-profile A/B
 # significance measure (C4 #21 A2); KL-divergence and effect size are plain std
 # math. Pure-Rust.
-statrs = "=0.18.0"
+statrs = "=0.19.1"
 # Efficacy-snapshot export (C4 #23 A4): CSV writer for the underlying time-series
 # and per-category drift data. Pure-Rust.
 csv = "=1.4.0"
