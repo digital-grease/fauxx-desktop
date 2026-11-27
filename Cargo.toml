@@ -179,7 +179,7 @@ fontdb = "=0.23.0"
 ttf-parser = "=0.25.1"
 # QR generation for out-of-band pairing (desktop shows a QR carrying its public
 # key + connection hint; the phone scans it).
-qrcode = "=0.14.1"
+qrcode = "=0.15.0"
 # Compact text encoding of the public key / connection hint inside the QR
 # payload and the sealed envelope framing.
 base64 = "=0.22.1"
